@@ -1,0 +1,322 @@
+[
+  {
+    "name": "blocks",
+    "path": "data/1.20.2/blocks",
+    "sha": "d97506bbfb96e98078d8263981ca50afe4720af2",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/blocks?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/blocks",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/d97506bbfb96e98078d8263981ca50afe4720af2",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/blocks?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/d97506bbfb96e98078d8263981ca50afe4720af2",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/blocks"
+    }
+  },
+  {
+    "name": "blocks_models.json",
+    "path": "data/1.20.2/blocks_models.json",
+    "sha": "fc06dfd545550d3f59fabac28a67e6ce384003fd",
+    "size": 1246328,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/blocks_models.json?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/blocks_models.json",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/fc06dfd545550d3f59fabac28a67e6ce384003fd",
+    "download_url": "https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.2/blocks_models.json",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/blocks_models.json?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/fc06dfd545550d3f59fabac28a67e6ce384003fd",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/blocks_models.json"
+    }
+  },
+  {
+    "name": "blocks_states.json",
+    "path": "data/1.20.2/blocks_states.json",
+    "sha": "84ccb154652352ed8b9c91208730bde8645f6d40",
+    "size": 886844,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/blocks_states.json?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/blocks_states.json",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/84ccb154652352ed8b9c91208730bde8645f6d40",
+    "download_url": "https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.2/blocks_states.json",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/blocks_states.json?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/84ccb154652352ed8b9c91208730bde8645f6d40",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/blocks_states.json"
+    }
+  },
+  {
+    "name": "blocks_textures.json",
+    "path": "data/1.20.2/blocks_textures.json",
+    "sha": "27539df89a0de0d731d8d566dc4db23323d3ac30",
+    "size": 171977,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/blocks_textures.json?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/blocks_textures.json",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/27539df89a0de0d731d8d566dc4db23323d3ac30",
+    "download_url": "https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.2/blocks_textures.json",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/blocks_textures.json?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/27539df89a0de0d731d8d566dc4db23323d3ac30",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/blocks_textures.json"
+    }
+  },
+  {
+    "name": "colormap",
+    "path": "data/1.20.2/colormap",
+    "sha": "3fee9a207cb617c93c3f7de7669d156e87e0a63a",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/colormap?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/colormap",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/3fee9a207cb617c93c3f7de7669d156e87e0a63a",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/colormap?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/3fee9a207cb617c93c3f7de7669d156e87e0a63a",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/colormap"
+    }
+  },
+  {
+    "name": "effect",
+    "path": "data/1.20.2/effect",
+    "sha": "188111b4db17b9d49765dda53a1af93a763ca0fc",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/effect?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/effect",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/188111b4db17b9d49765dda53a1af93a763ca0fc",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/effect?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/188111b4db17b9d49765dda53a1af93a763ca0fc",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/effect"
+    }
+  },
+  {
+    "name": "entity",
+    "path": "data/1.20.2/entity",
+    "sha": "cb4c52cc45d3ca24814a533d4a77d1b4c508da1d",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/entity?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/entity",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/cb4c52cc45d3ca24814a533d4a77d1b4c508da1d",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/entity?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/cb4c52cc45d3ca24814a533d4a77d1b4c508da1d",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/entity"
+    }
+  },
+  {
+    "name": "environment",
+    "path": "data/1.20.2/environment",
+    "sha": "af061f1ce01d386c52164dd11bdc6e0f32ae5489",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/environment?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/environment",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/af061f1ce01d386c52164dd11bdc6e0f32ae5489",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/environment?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/af061f1ce01d386c52164dd11bdc6e0f32ae5489",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/environment"
+    }
+  },
+  {
+    "name": "font",
+    "path": "data/1.20.2/font",
+    "sha": "6963802d3d1cb1249a12e7abd473e410d8d8fc7b",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/font?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/font",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/6963802d3d1cb1249a12e7abd473e410d8d8fc7b",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/font?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/6963802d3d1cb1249a12e7abd473e410d8d8fc7b",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/font"
+    }
+  },
+  {
+    "name": "gui",
+    "path": "data/1.20.2/gui",
+    "sha": "646362567a117dd1542a7660c9b489556b5851db",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/gui?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/gui",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/646362567a117dd1542a7660c9b489556b5851db",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/gui?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/646362567a117dd1542a7660c9b489556b5851db",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/gui"
+    }
+  },
+  {
+    "name": "items",
+    "path": "data/1.20.2/items",
+    "sha": "cfcf872d756460f1dd41e37838d6a58ad3c07914",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/items?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/items",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/cfcf872d756460f1dd41e37838d6a58ad3c07914",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/items?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/cfcf872d756460f1dd41e37838d6a58ad3c07914",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/items"
+    }
+  },
+  {
+    "name": "items_textures.json",
+    "path": "data/1.20.2/items_textures.json",
+    "sha": "808c4b43766982cc407e5de8b02590929f0edf22",
+    "size": 147949,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/items_textures.json?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/items_textures.json",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/808c4b43766982cc407e5de8b02590929f0edf22",
+    "download_url": "https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.2/items_textures.json",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/items_textures.json?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/808c4b43766982cc407e5de8b02590929f0edf22",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/items_textures.json"
+    }
+  },
+  {
+    "name": "map",
+    "path": "data/1.20.2/map",
+    "sha": "022f2e69fdb7f9c77241fb63275d6450b8c90bd1",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/map?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/map",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/022f2e69fdb7f9c77241fb63275d6450b8c90bd1",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/map?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/022f2e69fdb7f9c77241fb63275d6450b8c90bd1",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/map"
+    }
+  },
+  {
+    "name": "misc",
+    "path": "data/1.20.2/misc",
+    "sha": "90ad5e688777532750238a4abef0c71908ee211a",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/misc?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/misc",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/90ad5e688777532750238a4abef0c71908ee211a",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/misc?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/90ad5e688777532750238a4abef0c71908ee211a",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/misc"
+    }
+  },
+  {
+    "name": "mob_effect",
+    "path": "data/1.20.2/mob_effect",
+    "sha": "dacf3ccce9c3bdb66c608d1dfa8b6079ab022e1c",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/mob_effect?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/mob_effect",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/dacf3ccce9c3bdb66c608d1dfa8b6079ab022e1c",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/mob_effect?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/dacf3ccce9c3bdb66c608d1dfa8b6079ab022e1c",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/mob_effect"
+    }
+  },
+  {
+    "name": "models",
+    "path": "data/1.20.2/models",
+    "sha": "682806c26616183aebe12f03ef9d7b135c3ffe26",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/models?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/models",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/682806c26616183aebe12f03ef9d7b135c3ffe26",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/models?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/682806c26616183aebe12f03ef9d7b135c3ffe26",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/models"
+    }
+  },
+  {
+    "name": "painting",
+    "path": "data/1.20.2/painting",
+    "sha": "c907c896865af7f58adb6c86d8143c983f128490",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/painting?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/painting",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/c907c896865af7f58adb6c86d8143c983f128490",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/painting?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/c907c896865af7f58adb6c86d8143c983f128490",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/painting"
+    }
+  },
+  {
+    "name": "particle",
+    "path": "data/1.20.2/particle",
+    "sha": "6b305845ed22d364c88360e9eb76d89098ecf03e",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/particle?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/particle",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/6b305845ed22d364c88360e9eb76d89098ecf03e",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/particle?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/6b305845ed22d364c88360e9eb76d89098ecf03e",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/particle"
+    }
+  },
+  {
+    "name": "texture_content.json",
+    "path": "data/1.20.2/texture_content.json",
+    "sha": "ea7a544b975bcca87c46d6ff7af0d66c540797d7",
+    "size": 872629,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/texture_content.json?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/texture_content.json",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/ea7a544b975bcca87c46d6ff7af0d66c540797d7",
+    "download_url": "https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.2/texture_content.json",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/texture_content.json?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/ea7a544b975bcca87c46d6ff7af0d66c540797d7",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/texture_content.json"
+    }
+  },
+  {
+    "name": "trims",
+    "path": "data/1.20.2/trims",
+    "sha": "fb8826ba288b93d9d7accab84e7fa9ee81cab5e1",
+    "size": 0,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/trims?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/trims",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/fb8826ba288b93d9d7accab84e7fa9ee81cab5e1",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/trims?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/trees/fb8826ba288b93d9d7accab84e7fa9ee81cab5e1",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/tree/master/data/1.20.2/trims"
+    }
+  }
+]

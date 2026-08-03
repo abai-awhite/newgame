@@ -28,6 +28,51 @@
             <artifactId>gdx-platform</artifactId>
             <classifier>natives-desktop</classifier>
         </dependency>
+        <!-- 中文渲染（FreeType，jar 在 lib/，避免依赖外部仓库） -->
+        <dependency>
+            <groupId>com.badlogicgames.gdx</groupId>
+            <artifactId>gdx-freetype</artifactId>
+            <version>${gdx.version}</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../lib/gdx-freetype-1.12.1.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>com.badlogicgames.gdx</groupId>
+            <artifactId>gdx-freetype-platform</artifactId>
+            <version>${gdx.version}</version>
+            <classifier>natives-desktop</classifier>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../lib/gdx-freetype-platform-1.12.1-natives-desktop.jar</systemPath>
+        </dependency>
+        <!-- WebSocket 客户端 + JSON + 日志（server 同款依赖） -->
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.5.6</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../lib/Java-WebSocket-1.5.6.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20240303</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../lib/json-20240303.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.13</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../lib/slf4j-api-2.0.13.jar</systemPath>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-nop</artifactId>
+            <version>2.0.13</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../lib/slf4j-nop-2.0.13.jar</systemPath>
+        </dependency>
     </dependencies>
 
     <build>

@@ -1,0 +1,50 @@
+[
+  {
+    "name": "map_background.png",
+    "path": "data/1.20.2/map/map_background.png",
+    "sha": "e5fb6e3b1060f4cb38c458d1fba84d1f52eba002",
+    "size": 304,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/map/map_background.png?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/map/map_background.png",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/e5fb6e3b1060f4cb38c458d1fba84d1f52eba002",
+    "download_url": "https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.2/map/map_background.png",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/map/map_background.png?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/e5fb6e3b1060f4cb38c458d1fba84d1f52eba002",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/map/map_background.png"
+    }
+  },
+  {
+    "name": "map_background_checkerboard.png",
+    "path": "data/1.20.2/map/map_background_checkerboard.png",
+    "sha": "49cc07e3797a9e0bb9eba98fedbf08f5f63f244b",
+    "size": 383,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/map/map_background_checkerboard.png?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/map/map_background_checkerboard.png",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/49cc07e3797a9e0bb9eba98fedbf08f5f63f244b",
+    "download_url": "https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.2/map/map_background_checkerboard.png",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/map/map_background_checkerboard.png?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/49cc07e3797a9e0bb9eba98fedbf08f5f63f244b",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/map/map_background_checkerboard.png"
+    }
+  },
+  {
+    "name": "map_icons.png",
+    "path": "data/1.20.2/map/map_icons.png",
+    "sha": "a2611c92a18ca526d1c35fdbff033f6c327a8945",
+    "size": 856,
+    "url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/map/map_icons.png?ref=master",
+    "html_url": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/map/map_icons.png",
+    "git_url": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/a2611c92a18ca526d1c35fdbff033f6c327a8945",
+    "download_url": "https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.2/map/map_icons.png",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/PrismarineJS/minecraft-assets/contents/data/1.20.2/map/map_icons.png?ref=master",
+      "git": "https://api.github.com/repos/PrismarineJS/minecraft-assets/git/blobs/a2611c92a18ca526d1c35fdbff033f6c327a8945",
+      "html": "https://github.com/PrismarineJS/minecraft-assets/blob/master/data/1.20.2/map/map_icons.png"
+    }
+  }
+]

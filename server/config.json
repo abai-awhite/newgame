@@ -1,0 +1,10 @@
+{
+  "wsPort": 8081,
+  "httpPort": 8080,
+  "seed": 0,
+  "worldName": "web-world",
+  "maxPlayers": 16,
+  "chunkThreads": 2,
+  "broadcastHz": 32,
+  "gameTitle": "2D 沙盒游戏"
+}
