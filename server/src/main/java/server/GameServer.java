@@ -125,6 +125,15 @@ public class GameServer extends WebSocketServer {
                     // 玩家拾取掉落物：服务器权威移除（id 来自广播），并广播消失
                     world.removeDrop(obj.optInt("id", -1));
                 }
+                case "throw" -> {
+                    // 玩家按 Q 扔出当前手持物品：服务器在玩家面前生成带初速度的掉落物
+                    String item = obj.optString("item", "");
+                    if (!item.isEmpty()) {
+                        double vx = obj.optDouble("vx", 0);
+                        double vy = obj.optDouble("vy", 0);
+                        world.spawnDropForPlayer(state.profile, item, vx, vy);
+                    }
+                }
                 case "saveRequest" -> {
                     world.saveWorld();
                     world.savePlayerFile(state.profile.playerId, state.profile);
@@ -135,10 +144,11 @@ public class GameServer extends WebSocketServer {
                         .put("world", worldName)
                         .put("list", WorldStore.listToJson()).toString());
                 case "createWorld" -> {
-                    WorldStore.createWorld(obj.optString("name", ""), obj.optString("seed", ""));
+                    WorldStore.WorldMeta meta = WorldStore.createWorld(obj.optString("name", ""), obj.optString("seed", ""));
                     conn.send(new JSONObject()
                             .put("type", "worlds")
                             .put("world", worldName)
+                            .put("created", meta.name)   // 实际创建的世界名（重名时已自动加后缀）
                             .put("list", WorldStore.listToJson()).toString());
                 }
                 case "deleteWorld" -> {
@@ -343,10 +353,11 @@ public class GameServer extends WebSocketServer {
                         }
                     }
 
-                    // 2. 收集方块变更
+                    // 2. 收集方块变更 + 流体模拟 + 掉落物物理（重力下落/落地/磁吸）
                     world.drainTileChanges();
+                    world.tickFluid();
                     List<int[]> changes = world.getLastChanges();
-                    world.cleanupDrops();
+                    world.tickDrops(this::onDropPickup);
 
                     // 2.5 掉线检测：超过阈值未上报的客户端强制断开（清理幽灵连接）
                     long now = System.currentTimeMillis();
@@ -406,13 +417,14 @@ public class GameServer extends WebSocketServer {
         }
         msg.put("players", players);
 
-        // 方块变化增量
+        // 方块变化增量（含流体水位 lv，非液体恒为 0）
         JSONArray tileArray = new JSONArray();
         for (int[] change : changes) {
             JSONObject tile = new JSONObject();
             tile.put("x", change[0]);
             tile.put("y", change[1]);
             tile.put("type", change[3]);
+            tile.put("lv", change[5]);
             tileArray.put(tile);
         }
         msg.put("tiles", tileArray);
@@ -423,14 +435,32 @@ public class GameServer extends WebSocketServer {
             DropItem drop = e.getValue();
             JSONObject d = new JSONObject();
             d.put("id", e.getKey());
-            d.put("x", drop.getWorldX());
-            d.put("y", drop.getWorldY());
+            d.put("x", drop.getX());
+            d.put("y", drop.getY());
             d.put("name", drop.getItemName());
             drops.put(d);
         }
         msg.put("drops", drops);
 
         return msg;
+    }
+
+    /**
+     * 掉落物被玩家碰撞拾取（服务器权威检测）：向该玩家发送 dropPickup 事件，
+     * 客户端收到后从本地掉落物列表移除并把物品加入背包（背包权威在客户端）。
+     */
+    private void onDropPickup(String playerId, int dropId, String itemName, int count) {
+        for (Map.Entry<WebSocket, ClientState> e : clients.entrySet()) {
+            ClientState st = e.getValue();
+            if (st.profile != null && playerId.equals(st.profile.playerId)) {
+                e.getKey().send(new JSONObject()
+                        .put("type", "dropPickup")
+                        .put("id", dropId)
+                        .put("item", itemName)
+                        .put("count", count).toString());
+                return;
+            }
+        }
     }
 
     /**
@@ -488,19 +518,23 @@ public class GameServer extends WebSocketServer {
         return j;
     }
 
-    /** 序列化单个区块为紧凑格式（Base64，每字节一个 tile 类型） */
+    /** 序列化单个区块为紧凑格式（Base64，每字节一个 tile 类型；lv 为同序水位字节） */
     private JSONObject serializeChunk(ChunkPos pos) {
         byte[] data = new byte[main.world.Chunk.SIZE * main.world.Chunk.SIZE];
+        byte[] levels = new byte[main.world.Chunk.SIZE * main.world.Chunk.SIZE];
         int idx = 0;
         for (int localY = 0; localY < main.world.Chunk.SIZE; localY++) {
             for (int localX = 0; localX < main.world.Chunk.SIZE; localX++) {
-                data[idx++] = (byte) world.map.getChunkTile(localX, localY, pos);
+                data[idx] = (byte) world.map.getChunkTile(localX, localY, pos);
+                levels[idx] = (byte) world.map.getChunkFluidLevel(localX, localY, pos);
+                idx++;
             }
         }
         JSONObject obj = new JSONObject();
         obj.put("cx", pos.cx);
         obj.put("cy", pos.cy);
         obj.put("data", Base64.getEncoder().encodeToString(data));
+        obj.put("lv", Base64.getEncoder().encodeToString(levels));
         return obj;
     }
 

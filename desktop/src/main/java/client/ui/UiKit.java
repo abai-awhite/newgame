@@ -61,7 +61,14 @@ public class UiKit {
     public static float globalAlpha = 1f;
 
     /** UI 圆角半径（像素） */
-    public static final float UI_RADIUS = 8f;
+    public static final float UI_RADIUS = 6f;
+
+    // 面板浮雕层次常量（复用，避免每帧分配）
+    private static final Color PANEL_SHADOW = new Color(0, 0, 0, 0.35f);   // 外阴影
+    private static final Color PANEL_EDGE = new Color(0, 0, 0, 0.55f);     // 深色描边
+    private static final Color PANEL_LINE = new Color(1, 1, 1, 0.10f);     // 内侧亮线
+    private static final Color HL_TOP = new Color(1, 1, 1, 0.10f);         // 顶部高光
+    private static final Color SH_BOT = new Color(0, 0, 0, 0.16f);         // 底部阴影
 
     private static Texture circleTex;   // 白色实心圆（圆角填充用）
     private static Texture ringTex;     // 白色圆角边框环（9-patch）
@@ -154,6 +161,11 @@ public class UiKit {
         batch.draw(circleTex, x, up(vh, y + h), cs, cs);
         batch.draw(circleTex, x + w - cs, up(vh, y + h), cs, cs);
         batch.setColor(Color.WHITE);
+        // 内部层次：顶部内侧高光 + 底部内侧阴影（避开圆角区，浅色面板仍有效）
+        if (w - 2 * r > 0.5f) {
+            rectPlain(batch, vh, x + r, y + 2, w - 2 * r, 2, HL_TOP);
+            rectPlain(batch, vh, x + r, y + h - 4, w - 2 * r, 2, SH_BOT);
+        }
     }
 
     /** 直角实心矩形 */
@@ -203,21 +215,29 @@ public class UiKit {
             Pixmap pm = ringPixmap();
             ringTex = new Texture(pm);
             ringTex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-            ringPatch = new NinePatch(ringTex, 8, 8, 8, 8);
+            ringPatch = new NinePatch(ringTex, 6, 6, 6, 6);
             pm.dispose();
             tempTextures.add(ringTex);
         }
     }
 
-    /** 圆角边框环（24×24，圆角半径 8，线宽 2） */
+    /** 浮雕大面板：外阴影（右下偏移）+ 主体（含内高光/阴影）+ 深色描边 + 内侧亮线 */
+    public static void panel(SpriteBatch batch, int vh, float x, float y, float w, float h, Color base) {
+        rectR(batch, vh, x + 3, y + 5, w, h, PANEL_SHADOW, UI_RADIUS);
+        rect(batch, vh, x, y, w, h, base);
+        frameR(batch, vh, x, y, w, h, PANEL_EDGE, UI_RADIUS);
+        frameR(batch, vh, x + 1.5f, y + 1.5f, w - 3, h - 3, PANEL_LINE, Math.max(UI_RADIUS - 1.5f, 0.5f));
+    }
+
+    /** 圆角边框环（24×24，圆角半径 6，线宽 2） */
     private static Pixmap ringPixmap() {
         Pixmap pm = new Pixmap(24, 24, Pixmap.Format.RGBA8888);
         pm.setColor(1, 1, 1, 1);
-        fillRound(pm, 0, 0, 24, 24, 8);
+        fillRound(pm, 0, 0, 24, 24, 6);
         // 镂空内部（Blending.None 直接覆盖为透明）
         pm.setBlending(Pixmap.Blending.None);
         pm.setColor(0, 0, 0, 0);
-        fillRound(pm, 2, 2, 20, 20, 6);
+        fillRound(pm, 2, 2, 20, 20, 4);
         pm.setBlending(Pixmap.Blending.SourceOver);
         return pm;
     }

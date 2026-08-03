@@ -1,7 +1,9 @@
 package server;
 
+import entity.AABB;
 import entity.DropItem;
 import main.world.Chunk;
+import server.world.FluidSim;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +31,9 @@ public class WorldCore {
 
     public static final int TILE_SIZE = 32;
 
+    /** 掉落物拾取磁吸半径（像素，玩家中心到掉落物中心），略大于半格，防高速隧穿 */
+    private static final double PICKUP_RADIUS = 22.0;
+
     /** 地图引用（权威区块数据） */
     public final ServerInfiniteMap map;
 
@@ -39,8 +44,11 @@ public class WorldCore {
     private final Map<Integer, DropItem> dropItems = new ConcurrentHashMap<>();
     private final AtomicInteger dropIdCounter = new AtomicInteger(0);
 
-    /** 最近一次 tick 产生的方块变化（{x, y, oldType, newType}） */
+    /** 最近一次 tick 产生的方块变化（{x, y, oldType, newType, oldLevel, newLevel}） */
     private volatile List<int[]> lastChanges = List.of();
+
+    /** 服务器权威流体模拟（水/岩浆流动，由主协调线程 tick 驱动） */
+    private final FluidSim fluidSim;
 
     private final String worldDirPath;
 
@@ -49,6 +57,10 @@ public class WorldCore {
         map = new ServerInfiniteMap(seed, worldName, chunkThreads, legacy);
         map.loadWorld();
         this.worldDirPath = map.getWorldDirPath();
+        this.fluidSim = new FluidSim(map);
+        // Terraria "Settling Liquids"：进世界时强制计算并稳定所有液体（含薄水蒸发），
+        // 让存档/生成的水在玩家进入前就处于平衡状态
+        this.fluidSim.settleAll();
     }
 
     // ==================== 玩家管理 ====================
@@ -106,17 +118,73 @@ public class WorldCore {
         int current = map.getTileType(tileX, tileY);
         if ("break".equals(action)) {
             if (current == Chunk.AIR) return false;
-            map.setTileType(tileX, tileY, Chunk.AIR);
+            if (Chunk.isFluid(current)) {
+                // Terraria 式：舀液体 = 从所属连通水域总量扣一桶（16 单位 = 一整格），非清空单格；
+                // 水域按比例缩水、浅格先干涸，总量精确守恒，水面整体下降
+                fluidSim.scoop(tileX, tileY, current);
+                fluidSim.markBlockUpdate(tileX, tileY);
+                return true;
+            }
+            map.setTileTypeAndLevel(tileX, tileY, Chunk.AIR, 0);
             spawnDrop(tileX, tileY, current);
+            fluidSim.markBlockUpdate(tileX, tileY);
             return true;
         } else if ("place".equals(action)) {
-            if (current != Chunk.AIR) return false;
+            // 允许放在空气或液体格内（替换液体时流体被排挤位移，不凭空消失）
+            if (current != Chunk.AIR && !Chunk.isFluid(current)) return false;
             Integer blockType = BlockTypeMapper.itemToBlock(itemName);
             if (blockType == null) return false;
-            map.setTileType(tileX, tileY, blockType);
+            if (Chunk.isFluid(blockType)) {
+                // Terraria 式倒液体：一桶（16 单位 = 一整格）融入所属水域，水面微升而非整格方块
+                fluidSim.pour(tileX, tileY, blockType);
+            } else {
+                if (Chunk.isFluid(current)) {
+                    // 固体替换流体：把被排挤的液体位移（融入相邻水域或挤到上方格）
+                    int amount = FluidSim.FULL_AMOUNT - map.getFluidLevel(tileX, tileY);
+                    map.setTileTypeAndLevel(tileX, tileY, blockType, 0);
+                    fluidSim.displace(tileX, tileY, current, amount);
+                } else {
+                    map.setTileTypeAndLevel(tileX, tileY, blockType, 0);
+                }
+            }
+            fluidSim.markBlockUpdate(tileX, tileY);
             return true;
         }
         return false;
+    }
+
+    /**
+     * 每 tick 驱动流体模拟（内部按 8Hz 节奏运行）。由服务器主协调线程调用，
+     * 流体变更写入权威地图并进入方块变更日志（随本帧增量广播）。
+     */
+    public void tickFluid() {
+        fluidSim.tick();
+    }
+
+    /**
+     * 玩家按 Q 扔出物品（类 Minecraft）：从玩家中心朝抛出速度方向生成掉落物。
+     * 物品入包/消耗由客户端完成（背包权威在客户端），服务器只生成权威掉落物。
+     * vx/vy 为客户端按鼠标方向计算的速度；全 0 时退回"面向方向"默认抛速。
+     */
+    public int spawnDropForPlayer(PlayerProfile p, String itemName, double vx, double vy) {
+        double cx = p.x + TILE_SIZE / 2.0;
+        double cy = p.y + TILE_SIZE / 2.0;
+        double dir = "left".equals(p.direction) ? -1 : 1;
+        double startX, startY;
+        if (vx != 0 || vy != 0) {
+            double len = Math.hypot(vx, vy);
+            startX = cx + vx / len * 20;
+            startY = cy + vy / len * 20;
+        } else {
+            startX = cx + dir * 20;
+            startY = cy - 4;
+        }
+        int id = dropIdCounter.incrementAndGet();
+        DropItem d = new DropItem(map, TILE_SIZE, startX, startY, itemName, 1);
+        d.setVX(vx != 0 || vy != 0 ? vx : dir * 6);
+        d.setVY(vx != 0 || vy != 0 ? vy : -5);
+        dropItems.put(id, d);
+        return id;
     }
 
     private int spawnDrop(int tileX, int tileY, int tileType) {
@@ -125,7 +193,8 @@ public class WorldCore {
         double dropX = tileX * TILE_SIZE + TILE_SIZE / 2.0;
         double dropY = tileY * TILE_SIZE + TILE_SIZE / 2.0;
         int id = dropIdCounter.incrementAndGet();
-        dropItems.put(id, new DropItem(dropX, dropY, itemName, 1));
+        // 掉落物作为独立实体接入与玩家一致的 AABB 物理（重力 + 地面碰撞）
+        dropItems.put(id, new DropItem(map, TILE_SIZE, dropX, dropY, itemName, 1));
         return id;
     }
 
@@ -149,6 +218,38 @@ public class WorldCore {
     /** 清理已死亡掉落物（寿命耗尽），返回是否清掉。 */
     public void cleanupDrops() {
         dropItems.values().removeIf(d -> !d.isAlive());
+    }
+
+    /**
+     * 每 tick 更新所有掉落物：实体物理（重力 + AABB 方块碰撞，支撑被挖掉自然下落），
+     * 随后检测掉落物与玩家的实体间碰撞（AABB 重叠 → 触发拾取回调），最后清理死亡掉落物。
+     * 由服务器主协调线程调用（权威物理，广播读 ConcurrentHashMap 安全）。
+     */
+    public void tickDrops(DropPickupHandler handler) {
+        for (Map.Entry<Integer, DropItem> entry : dropItems.entrySet()) {
+            DropItem d = entry.getValue();
+            d.update();
+            if (!d.isAlive()) continue;
+
+            // 磁吸拾取：玩家中心与掉落物中心距离 < PICKUP_RADIUS 即被吸入。
+            // 比 AABB 相交（26×26 ∩ 16×16，横向容差仅 21px）更宽容，且防高速隧穿。
+            for (PlayerProfile p : players.values()) {
+                if (Math.hypot(d.getX() - (p.x + TILE_SIZE / 2.0),
+                        d.getY() - (p.y + TILE_SIZE / 2.0)) < PICKUP_RADIUS) {
+                    if (handler != null) {
+                        handler.onPickup(p.playerId, entry.getKey(), d.getItemName(), d.getCount());
+                    }
+                    dropItems.remove(entry.getKey());
+                    break;
+                }
+            }
+        }
+        cleanupDrops();
+    }
+
+    /** 掉落物拾取回调：玩家碰撞到掉落物（服务器权威检测，客户端收到事件后入包） */
+    public interface DropPickupHandler {
+        void onPickup(String playerId, int dropId, String itemName, int count);
     }
 
     /** 存活掉落物（id -> DropItem，广播用）。 */

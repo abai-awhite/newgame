@@ -95,12 +95,15 @@ public class WorldStore {
 
     /**
      * 创建新世界：目录不存在则创建并写入元数据（双层种子派生）；
-     * 已存在则直接返回既有元数据，不覆盖存档。
+     * 名字已存在时自动在末尾追加 _1/_2/... 直到唯一（如 "世界1" -> "世界1_1"），
+     * 返回实际创建的世界元数据。
      */
     public static WorldMeta createWorld(String name, String seedText) {
         String safe = sanitizeName(name);
-        WorldMeta existing = loadMeta(safe);
-        if (existing != null) return existing;
+        String base = safe;
+        for (int i = 1; loadMeta(safe) != null; i++) {
+            safe = base + "_" + i;
+        }
 
         String seedStr = (seedText == null || seedText.isBlank()) ? "0" : seedText.trim();
         // 第一层：世界哈希

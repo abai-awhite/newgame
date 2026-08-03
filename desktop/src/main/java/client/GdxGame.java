@@ -151,6 +151,7 @@ public class GdxGame extends ApplicationAdapter {
             {"space", "跳跃", "Space"},
             {"f3", "调试界面", "F3"},
             {"eKey", "背包", "KeyE"},
+            {"q", "扔出物品", "KeyQ"},
             {"esc", "暂停菜单", "Escape"},
             {"alt", "冲刺", "Alt"},
     };
@@ -171,6 +172,9 @@ public class GdxGame extends ApplicationAdapter {
     private Keys keys = new Keys();
 
     private float camX, camY, acc;
+
+    /** F3 位置基准（出生点=0）：welcome 时以玩家初始位置设为原点，左负右正、上正下负 */
+    private float spawnX = 100f, spawnY = WORLD_HEIGHT_TILES / 2f * TILE - TILE;
 
     private boolean connected;
     private String myPlayerId;
@@ -210,6 +214,9 @@ public class GdxGame extends ApplicationAdapter {
     private boolean mouseLeft, mouseRight;
 
     private int breakCooldown, placeCooldown;
+    /** Q 扔出：按住连续抛（keyDown 置 true / keyUp 置 false），qThrowCd 为抛出间隔（tick） */
+    private boolean qHeld;
+    private int qThrowCd;
 
     private ItemSlot[] inventory = new ItemSlot[INVENTORY_TOTAL];
     private Dragging draggingItem;
@@ -222,6 +229,16 @@ public class GdxGame extends ApplicationAdapter {
     // 多人 / 掉落物
     private final Map<String, RemotePlayer> remotes = new HashMap<>();
     private List<DropView> drops = new ArrayList<>();
+
+    // 冲刺粒子（世界坐标，向后拖尾）
+    private static final int DASH_P_MAX = 90;
+    private final float[] dPx = new float[DASH_P_MAX];
+    private final float[] dPy = new float[DASH_P_MAX];
+    private final float[] dPvx = new float[DASH_P_MAX];
+    private final float[] dPvy = new float[DASH_P_MAX];
+    private final float[] dPlife = new float[DASH_P_MAX];
+    private final float[] dPmaxLife = new float[DASH_P_MAX];
+    private int dPCount = 0;
 
     // 网络
     private NetClient net;
@@ -400,6 +417,7 @@ public class GdxGame extends ApplicationAdapter {
         } else {
             acc = 0;
         }
+        updateDashParticles(delta);
     }
 
     /** 本地模拟 32Hz（移植 game.js localTick） */
@@ -407,11 +425,21 @@ public class GdxGame extends ApplicationAdapter {
         player.prevX = player.x;
         player.prevY = player.y;
         player.tick(keys, world, blocks, autoStepEnabled);
+        if (player.dashFx > 0) spawnDashParticles();
         player.renderX = player.x;
         player.renderY = player.y;
         updateInteractions();
-        updateLocalDrops();
         updateCamera();
+        // 按住 Q 连续抛出（间隔 10 tick ≈ 3.2 次/秒）
+        if (qHeld) {
+            if (qThrowCd > 0) qThrowCd--;
+            if (qThrowCd == 0) {
+                throwSelectedItem();
+                qThrowCd = 10;
+            }
+        } else if (qThrowCd > 0) {
+            qThrowCd--;
+        }
         sendPlayerState();
     }
 
@@ -426,6 +454,57 @@ public class GdxGame extends ApplicationAdapter {
         float camOffset = inventoryOpen ? winH * 0.15f : 0;
         camX += (targetCamX - camX) * 0.1f;
         camY += (targetCamY - camY + camOffset) * 0.1f;
+    }
+
+    // ==================== 冲刺粒子 ====================
+
+    /** 冲刺时从玩家身后生成向后飘散的粒子（每个 tick 生成数个） */
+    private void spawnDashParticles() {
+        int dir = player.dashFxDir;
+        if (dir == 0) return;
+        float cx = player.renderX + TILE / 2;
+        float cy = player.renderY + TILE / 2;
+        for (int i = 0; i < 3; i++) {
+            if (dPCount >= DASH_P_MAX) break;
+            dPx[dPCount] = cx - dir * (10 + (float) Math.random() * 18) + (float) (Math.random() - 0.5) * 10;
+            dPy[dPCount] = cy + (float) (Math.random() - 0.5) * 18;
+            dPvx[dPCount] = -dir * (20 + (float) Math.random() * 40);
+            dPvy[dPCount] = (float) (Math.random() - 0.3) * 40 - 10;
+            dPlife[dPCount] = dPmaxLife[dPCount] = 0.25f + (float) Math.random() * 0.25f;
+            dPCount++;
+        }
+    }
+
+    private void updateDashParticles(float delta) {
+        for (int i = 0; i < dPCount; i++) {
+            dPx[i] += dPvx[i] * delta;
+            dPy[i] += dPvy[i] * delta;
+            dPlife[i] -= delta;
+        }
+        int w = 0;
+        for (int i = 0; i < dPCount; i++) {
+            if (dPlife[i] > 0) {
+                if (w != i) {
+                    dPx[w] = dPx[i]; dPy[w] = dPy[i];
+                    dPvx[w] = dPvx[i]; dPvy[w] = dPvy[i];
+                    dPlife[w] = dPlife[i]; dPmaxLife[w] = dPmaxLife[i];
+                }
+                w++;
+            }
+        }
+        dPCount = w;
+    }
+
+    /** 绘制冲刺粒子（世界层，renderer.draw 之后调用，用物理窗口尺寸） */
+    private void drawDashParticles(int vw, int vh) {
+        for (int i = 0; i < dPCount; i++) {
+            float t = Math.max(0, Math.min(1, dPlife[i] / dPmaxLife[i]));
+            Color c = new Color(0.55f, 0.85f, 1f, 0.85f * t);
+            float size = 10 * (0.5f + 0.5f * t);
+            float sx = dPx[i] - camX - size / 2;
+            float sy = dPy[i] - camY - size / 2;
+            UiKit.rectR(batch, vh, sx, sy, size, size, c, 0);
+        }
     }
 
     // ==================== 交互（移植 game.js updateInteractions） ====================
@@ -493,9 +572,12 @@ public class GdxGame extends ApplicationAdapter {
         Selection sel = selected;
         if (sel == null) return;
         if (!isWithinRange(sel.x, sel.y)) return;
-        if (world.getTile(sel.x, sel.y) == BlocksData.T_AIR) return;
+        int tgt = world.getTile(sel.x, sel.y);
+        if (tgt == BlocksData.T_AIR) return;
+        // 液体不能左键挖掉（Terraria 式），只能用桶右键舀水
+        if (tgt == BlocksData.T_WATER || tgt == BlocksData.T_LAVA) return;
 
-        world.setLocalTile(sel.x, sel.y, BlocksData.T_AIR);
+        world.setLocalTile(sel.x, sel.y, BlocksData.T_AIR, 0);
         breakCooldown = COOLDOWN_BREAK;
         send(new JSONObject()
                 .put("type", "blockAction")
@@ -510,15 +592,58 @@ public class GdxGame extends ApplicationAdapter {
         if (!isWithinRange(sel.x, sel.y)) return;
         ItemSlot item = inventory[player.slot];
         if (item == null || item.count <= 0) return;
-        int blockType = blocks.tileId(item.name);
+
+        String name = item.name;
+        int t = world.getTile(sel.x, sel.y);
+
+        // —— 桶交互：空桶舀液体 / 满桶倒液体 ——
+        if ("bucket".equals(name) && (t == BlocksData.T_WATER || t == BlocksData.T_LAVA)) {
+            // 舀液体：消耗空桶 → 获得 water_bucket / lava_bucket（水 dr:null 不掉落物）。
+            // 服务端 scoop 是"整片水域按比例缩水"（Terraria 式），目标格并不会变空气，
+            // 因此本地不做任何预测（避免出现假坑），等服务端广播覆盖整片水域的水位。
+            String filled = t == BlocksData.T_WATER ? "water_bucket" : "lava_bucket";
+            if (!canAddToInventory(filled)) return;
+            item.count--;
+            if (item.count <= 0) inventory[player.slot] = null;
+            addItemToInventory(filled, 1);
+            placeCooldown = COOLDOWN_PLACE;
+            send(new JSONObject()
+                    .put("type", "blockAction")
+                    .put("x", sel.x).put("y", sel.y)
+                    .put("action", "break"));
+            return;
+        }
+        if (("water_bucket".equals(name) || "lava_bucket".equals(name))
+                && (t == BlocksData.T_AIR || blocks.isFluid(t))) {
+            // 倒液体：消耗满桶 → 获得空桶。一桶 = 一整格（16 级系统 level 0 = 满格）。
+            // 本地先显示一满格（孤立倒水时的正确结果），服务端 pour 会把它融入所属水域
+            // 或保持满格，随后广播覆盖修正水位（level 48 是旧 64 级体系的残留，已废弃）。
+            boolean isWater = "water_bucket".equals(name);
+            int fluidType = isWater ? BlocksData.T_WATER : BlocksData.T_LAVA;
+            if (!canAddToInventory("bucket")) return;
+            item.count--;
+            if (item.count <= 0) inventory[player.slot] = null;
+            addItemToInventory("bucket", 1);
+            world.setLocalTile(sel.x, sel.y, fluidType, 0);
+            placeCooldown = COOLDOWN_PLACE;
+            send(new JSONObject()
+                    .put("type", "blockAction")
+                    .put("x", sel.x).put("y", sel.y)
+                    .put("action", "place")
+                    .put("item", isWater ? "water" : "lava"));
+            return;
+        }
+
+        // —— 普通方块放置（目标放宽为空气或液体） ——
+        int blockType = blocks.tileId(name);
         if (blockType < 0) return;
-        if (world.getTile(sel.x, sel.y) != BlocksData.T_AIR) return;
+        if (t != BlocksData.T_AIR && !blocks.isFluid(t)) return;
         // 玩家重叠保护
         int ptx = (int) Math.floor(player.x / TILE);
         int pty = (int) Math.floor(player.y / TILE);
         if (sel.x == ptx && sel.y == pty) return;
 
-        world.setLocalTile(sel.x, sel.y, blockType);
+        world.setLocalTile(sel.x, sel.y, blockType, 0);
         item.count--;
         if (item.count <= 0) inventory[player.slot] = null;
         placeCooldown = COOLDOWN_PLACE;
@@ -527,30 +652,18 @@ public class GdxGame extends ApplicationAdapter {
                 .put("type", "blockAction")
                 .put("x", sel.x).put("y", sel.y)
                 .put("action", "place")
-                .put("item", item.name));
+                .put("item", name));
     }
 
-    // ==================== 掉落物磁吸 ====================
-
-    private void updateLocalDrops() {
-        for (DropView d : drops) {
-            d.life++;
-            float dx = player.x - d.x;
-            float dy = player.y - d.y;
-            float dist = (float) Math.sqrt(dx * dx + dy * dy);
-            if (dist < 150) {
-                if (dist < 10) {
-                    d.dead = true;
-                    send(new JSONObject().put("type", "pickup").put("id", d.id));
-                    addItemToInventory(d.name, 1);
-                    continue;
-                }
-                float speed = 4f * (1 + (150 - dist) / 150f * 2);
-                d.x += (dx / dist) * speed;
-                d.y += (dy / dist) * speed;
-            }
+    /** 背包是否有空间容纳物品（同名未满堆或空槽） */
+    private boolean canAddToInventory(String name) {
+        for (ItemSlot s : inventory) {
+            if (s != null && s.name.equals(name) && s.count < MAX_STACK) return true;
         }
-        drops.removeIf(d -> d.dead);
+        for (ItemSlot s : inventory) {
+            if (s == null) return true;
+        }
+        return false;
     }
 
     // ==================== 背包系统 ====================
@@ -572,6 +685,40 @@ public class GdxGame extends ApplicationAdapter {
             }
         }
         syncInventory();
+    }
+
+    /** 按 Q 扔出当前手持物品（消耗 1 个，方向朝鼠标，生成服务器掉落物，类 Minecraft） */
+    private void throwSelectedItem() {
+        if (screen != Screen.GAME || paused || inventoryOpen) return;
+        ItemSlot s = inventory[player.slot];
+        if (s == null || s.count <= 0) return;
+        String name = s.name;
+        s.count--;
+        if (s.count <= 0) inventory[player.slot] = null;
+        syncInventory();
+        // 抛出方向朝鼠标（世界坐标 = 物理屏幕坐标 + 相机偏移；相机跟随玩家，漏加会整体拉偏方向）
+        float cx = player.renderX + TILE / 2;
+        float cy = player.renderY + TILE / 2;
+        float mx = mousePX + camX;
+        float my = mousePY + camY;
+        float dx = mx - cx;
+        float dy = my - cy;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        float vx, vy;
+        if (len > 1f) {
+            float sp = 7f;
+            vx = dx / len * sp;
+            vy = dy / len * sp;
+        } else {
+            float dir = "left".equals(player.direction) ? -1f : 1f;
+            vx = dir * 6f;
+            vy = -5f;
+        }
+        send(new JSONObject()
+                .put("type", "throw")
+                .put("item", name)
+                .put("vx", (double) vx)
+                .put("vy", (double) vy));
     }
 
     private void syncInventory() {
@@ -601,7 +748,7 @@ public class GdxGame extends ApplicationAdapter {
         // 初始物品使用真实方块名（小写，与服务器 BlockTypeMapper 匹配；web 版大写名实际不可放置）
         String[][] defaults = {
                 {"grass_block", "64"}, {"dirt", "64"}, {"stone", "64"},
-                {"sand", "64"}, {"oak_log", "64"},
+                {"sand", "64"}, {"oak_log", "64"}, {"bucket", "1"},
         };
         for (int i = 0; i < defaults.length && i < HOTBAR_SIZE; i++) {
             inventory[i] = new ItemSlot(defaults[i][0], Integer.parseInt(defaults[i][1]));
@@ -755,6 +902,8 @@ public class GdxGame extends ApplicationAdapter {
                             player.renderY = player.y;
                             camX = player.x - winW / 2f;
                             camY = player.y - winH / 2f;
+                            spawnX = player.x;   // F3 基准：进入世界时的位置 = (0,0)
+                            spawnY = player.y;
                             if (p.has("slot")) player.slot = p.optInt("slot", player.slot);
                         }
                         remotes.put(p.optString("id"), toRemote(p));
@@ -776,7 +925,9 @@ public class GdxGame extends ApplicationAdapter {
                         JSONObject c = chunks.getJSONObject(i);
                         try {
                             byte[] data = Base64.getDecoder().decode(c.optString("data", ""));
-                            world.putChunk(c.optInt("cx", 0), c.optInt("cy", 0), data);
+                            String lvStr = c.optString("lv", "");
+                            byte[] lv = lvStr.isEmpty() ? null : Base64.getDecoder().decode(lvStr);
+                            world.putChunk(c.optInt("cx", 0), c.optInt("cy", 0), data, lv);
                         } catch (Exception e) {
                             System.err.println("区块解码失败: " + e.getMessage());
                         }
@@ -786,11 +937,21 @@ public class GdxGame extends ApplicationAdapter {
                 if (tiles != null) {
                     for (int i = 0; i < tiles.length(); i++) {
                         JSONObject t = tiles.getJSONObject(i);
-                        world.applyRemoteTile(t.optInt("x", 0), t.optInt("y", 0), t.optInt("type", 0));
+                        world.applyRemoteTile(t.optInt("x", 0), t.optInt("y", 0), t.optInt("type", 0), t.optInt("lv", 0));
                     }
                 }
                 JSONArray dropList = msg.optJSONArray("drops");
                 if (dropList != null) applyServerDrops(dropList);
+                break;
+            }
+            case "dropPickup": {
+                // 服务器权威：掉落物与玩家 AABB 重叠 → 被吸取。移除本地掉落物并加入背包
+                int id = msg.optInt("id", -1);
+                drops.removeIf(d -> d.id == id);
+                String item = msg.optString("item", null);
+                if (item != null && !item.isEmpty()) {
+                    addItemToInventory(item, Math.max(1, msg.optInt("count", 1)));
+                }
                 break;
             }
             case "playerJoined": {
@@ -837,7 +998,9 @@ public class GdxGame extends ApplicationAdapter {
                 }
             }
             if (pendingEnterWorld != null) {
-                String name = pendingEnterWorld;
+                // 重名时服务器会改名（如 世界1_1），优先用服务器回传的实际创建名进入
+                String name = msg.optString("created", "");
+                if (name.isEmpty()) name = pendingEnterWorld;
                 pendingEnterWorld = null;
                 enterWorld(name);
             }
@@ -871,6 +1034,9 @@ public class GdxGame extends ApplicationAdapter {
                 }
             }
             if (existing != null) {
+                // 掉落物始终跟随服务器权威位置（服务器实体物理：重力 + 方块碰撞，支撑移除继续下落），无客户端远程磁吸
+                existing.x = (float) d.optDouble("x", existing.x);
+                existing.y = (float) d.optDouble("y", existing.y);
                 next.add(existing);
             } else {
                 DropView nv = new DropView();
@@ -948,6 +1114,10 @@ public class GdxGame extends ApplicationAdapter {
     /** 进入游戏会话（重置状态并连接服务器） */
     private void startGameSession(String wsUrl) {
         screen = Screen.GAME;
+        // 关键：清掉世界选择/设置里残留的输入框焦点与按键监听，
+        // 否则 onKeyDown 会因 focusedField/listeningAction 非空而吞掉全部移动按键
+        focusedField = null;
+        listeningAction = null;
         world.clear();
         remotes.clear();
         drops = new ArrayList<>();
@@ -1288,14 +1458,28 @@ public class GdxGame extends ApplicationAdapter {
             return;
         }
 
+        // 6.5 扔出物品（Q 动作：按住连续抛，方向朝鼠标）
+        if (code != null && "q".equals(actionForCode(code))) {
+            qHeld = true;
+            if (qThrowCd <= 0) {
+                throwSelectedItem();
+                qThrowCd = 10;
+            }
+            return;
+        }
+
         // 7. 移动/跳跃/冲刺动作
         String action = actionForCode(code);
         if (action != null) setKey(action, true);
     }
 
     private void onKeyUp(int keycode) {
+        String code = keycodeToCode(keycode);
+        if (code != null && "q".equals(actionForCode(code))) {
+            qHeld = false;
+        }
         if (screen != Screen.GAME) return;
-        String action = actionForCode(keycodeToCode(keycode));
+        String action = actionForCode(code);
         if (action != null) setKey(action, false);
     }
 
@@ -1514,6 +1698,7 @@ public class GdxGame extends ApplicationAdapter {
         batch.setProjectionMatrix(worldProj);
         renderer.draw(batch, (int) winW, (int) winH, world, blocks, texFactory, playerTex,
                 camX, camY, player, drops, remotes, myPlayerId, selected);
+        drawDashParticles((int) winW, (int) winH);
         // UI 层：虚拟坐标（缩放居中）
         batch.setProjectionMatrix(uiProj);
         if (!inventoryOpen) drawHotbar(vw, vh);
@@ -1554,7 +1739,17 @@ public class GdxGame extends ApplicationAdapter {
     /** 物品图标（方块纹理 / 非方块兜底色+首字母），size 为显示尺寸 */
     private void drawItemIcon(String name, int count, float x, float y, float size, boolean showCount, int vh) {
         int tileId = blocks.tileId(name);
-        if (tileId >= 0) {
+        if ("bucket".equals(name) || "water_bucket".equals(name) || "lava_bucket".equals(name)) {
+            // 桶：固定颜色（灰/蓝/橙），无方块纹理
+            Color c = "water_bucket".equals(name) ? new Color(0.35f, 0.55f, 0.95f, 1)
+                    : "lava_bucket".equals(name) ? new Color(0.95f, 0.5f, 0.15f, 1)
+                    : new Color(0.62f, 0.62f, 0.66f, 1);
+            UiKit.rectR(batch, vh, x, y, size, size, c, 0);
+            UiKit.frameR(batch, vh, x, y, size, size, new Color(0, 0, 0, 0.6f), 0);
+            char ch = Character.toUpperCase(name.charAt(0));
+            UiKit.text(batch, vh, UiKit.fontSmall, String.valueOf(ch),
+                    x + size / 2, y + size / 2, Color.WHITE);
+        } else if (tileId >= 0) {
             Texture t = texFactory.getTexture(tileId, blocks.meta(tileId));
             batch.draw(t, x + (size - 32) / 2f, UiKit.up(vh, y + (size - 32) / 2f + 32), 32, 32);
         } else {
@@ -1595,7 +1790,8 @@ public class GdxGame extends ApplicationAdapter {
     private void drawDebug(int vw, int vh) {
         String[] lines = {
                 "FPS: " + Gdx.graphics.getFramesPerSecond(),
-                "位置: (" + (int) player.x + ", " + (int) player.y + ")",
+                "位置: X=" + (int) ((player.x + TILE / 2 - spawnX) / TILE)
+                        + ", Y=" + (int) ((spawnY - (player.y + TILE / 2)) / TILE),
                 "朝向: " + player.direction + "  跳跃: " + player.jumpPhase,
                 "Vy: " + String.format(Locale.ROOT, "%.1f", player.vy) + "  地面: " + player.onGround,
                 "冲刺: " + player.dashCharges + "/" + player.dashMax,
@@ -1669,8 +1865,7 @@ public class GdxGame extends ApplicationAdapter {
         float px = panelX(vw);
         float py = panelY(vh) + invSlide;
         float panelW = 896, panelH = 284;
-        UiKit.rect(batch, vh, px, py, panelW, panelH, new Color(0.118f, 0.118f, 0.157f, 0.92f));
-        UiKit.frame(batch, vh, px, py, panelW, panelH, 2, new Color(1, 1, 1, 0.3f));
+        UiKit.panel(batch, vh, px, py, panelW, panelH, new Color(0.118f, 0.118f, 0.157f, 0.92f));
 
         float pad = 14;
 
@@ -1820,8 +2015,7 @@ public class GdxGame extends ApplicationAdapter {
         float w = 260, h = 300;
         float x = vw / 2 - w / 2;
         float y = vh / 2 - h / 2 + slide;
-        UiKit.rect(batch, vh, x, y, w, h, new Color(0.12f, 0.12f, 0.16f, 0.95f));
-        UiKit.frame(batch, vh, x, y, w, h, 2, new Color(1, 1, 1, 0.4f));
+        UiKit.panel(batch, vh, x, y, w, h, new Color(0.12f, 0.12f, 0.16f, 0.95f));
         UiKit.text(batch, vh, UiKit.fontTitle, "暂停", vw / 2, y + 18, Color.WHITE);
         String worldInfo = "世界: " + (worldName == null ? "-" : worldName) + "  哈希: " + (seedHash == null ? "-" : seedHash);
         UiKit.text(batch, vh, UiKit.fontSmall, worldInfo, vw / 2, y + 52, new Color(0.78f, 0.78f, 0.83f, 1));
@@ -1902,9 +2096,11 @@ public class GdxGame extends ApplicationAdapter {
         } else {
             for (WorldInfo w : worldsList) {
                 WorldCard card = new WorldCard(w.name, listX, listY, 340, 52, w.name.equals(currentWorldName));
-                UiKit.rect(batch, vh, card.x, card.y, card.w, card.h, new Color(0.235f, 0.176f, 0.118f, 0.8f));
-                UiKit.frame(batch, vh, card.x, card.y, card.w, card.h, 2,
-                        card.current ? new Color(0.42f, 0.79f, 0.42f, 1) : new Color(0.55f, 0.43f, 0.31f, 1));
+                UiKit.panel(batch, vh, card.x, card.y, card.w, card.h, new Color(0.235f, 0.176f, 0.118f, 0.8f));
+                if (card.current) {
+                    UiKit.frame(batch, vh, card.x, card.y, card.w, card.h, 2,
+                            new Color(0.42f, 0.79f, 0.42f, 1));
+                }
                 String title = w.name + (card.current ? "（当前）" : "");
                 UiKit.textLeft(batch, vh, UiKit.fontNormal, title, card.x + 16, card.y + 12, Color.WHITE);
                 UiKit.textLeft(batch, vh, UiKit.fontSmall, "哈希 " + (w.seedHash.isEmpty() ? "-" : w.seedHash),
@@ -1960,8 +2156,7 @@ public class GdxGame extends ApplicationAdapter {
         float w = 640, h = 420;
         float x = (vw - w) / 2f;
         float y = (vh - h) / 2f;
-        UiKit.rect(batch, vh, x, y, w, h, new Color(0.09f, 0.09f, 0.12f, 0.97f));
-        UiKit.frame(batch, vh, x, y, w, h, 2, new Color(1, 1, 1, 0.35f));
+        UiKit.panel(batch, vh, x, y, w, h, new Color(0.09f, 0.09f, 0.12f, 0.97f));
         UiKit.text(batch, vh, UiKit.fontTitle, "设置", x + 70, y + 14, Color.WHITE);
         btnSettingsClose = new UiKit.Button(x + w - 54, y + 12, 40, 34, "×");
         btnSettingsClose.updateHover(mouseX, mouseY);

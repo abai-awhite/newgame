@@ -1,6 +1,5 @@
 {
   "wsPort": 8081,
-  "httpPort": 8080,
   "seed": 0,
   "worldName": "web-world",
   "maxPlayers": 16,

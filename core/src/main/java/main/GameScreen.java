@@ -410,7 +410,7 @@ public class GameScreen extends ApplicationAdapter {
             String texPath = main.gui.Item.getTexturePath(drop.getItemName());
             Texture tex = texPath != null ? getTexture(texPath) : null;
             if (tex != null) {
-                batch.draw(tex, (float) drop.getWorldX() - 8, (float) drop.getWorldY() - 8, 16, 16);
+                batch.draw(tex, (float) drop.getX() - 8, (float) drop.getY() - 8, 16, 16);
             }
         }
     }

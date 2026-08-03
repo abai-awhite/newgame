@@ -76,9 +76,9 @@ public class PlayerProfile {
         return slots[index];
     }
 
-    /** 初始化默认背包：快捷栏给 5 种基础方块各 64 个 */
+    /** 初始化默认背包：快捷栏给 5 种基础方块各 64 个 + 1 个空桶（流体系统） */
     public void initDefaultInventory() {
-        String[] defaults = {"grass_block|64", "dirt|64", "stone|64", "sand|64", "oak_log|64"};
+        String[] defaults = {"grass_block|64", "dirt|64", "stone|64", "sand|64", "oak_log|64", "bucket|1"};
         for (int i = 0; i < defaults.length && i < HOTBAR_SIZE; i++) {
             slots[i] = defaults[i];
         }

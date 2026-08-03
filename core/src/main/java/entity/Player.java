@@ -12,24 +12,18 @@ import main.world.InfiniteMap;
  *
  * <h3>核心机制</h3>
  * <ul>
- *   <li>逻辑更新（update）修改 currentX/currentY（真实逻辑位置）</li>
+ *   <li>逻辑更新（update）修改 x/y（真实逻辑位置）</li>
  *   <li>渲染时根据时间比例 alpha 计算出 renderX/renderY（平滑绘制位置）</li>
  *   <li>通过线性插值消除因逻辑帧率低而产生的卡顿感</li>
  * </ul>
  */
-public class Player {
+public class Player extends Entity {
 
     /** 世界总高度（格子数）。 */
     public static final int WORLD_HEIGHT_TILES = 1024;
 
     private static final double EPSILON = 1e-6;
     private static final double VELOCITY_EPSILON = 0.001;
-
-    /** 地图引用，用于碰撞检测中的方块查询。 */
-    private final InfiniteMap infiniteMap;
-
-    /** 方块大小（像素）。 */
-    private final int tileSize;
 
     // ==================== 输入状态（由外部设置） ====================
     /** W 键按下状态。 */
@@ -46,10 +40,6 @@ public class Player {
     public boolean keyAlt;
 
     // ==================== 位置与插值字段 ====================
-    /** 当前逻辑位置 X（真实游戏坐标），由 update() 更新。 */
-    public double currentX;
-    /** 当前逻辑位置 Y（真实游戏坐标），由 update() 更新。 */
-    public double currentY;
     /** 上一次逻辑更新时的位置 X，用于线性插值的起点。 */
     double previousX;
     /** 上一次逻辑更新时的位置 Y，用于线性插值的起点。 */
@@ -60,7 +50,6 @@ public class Player {
     public double renderY;
 
     // ==================== 跳跃与重力字段 ====================
-    public double velocityY = 0;
     public boolean onGround = false;
     final double jumpSpeed = 14;
     final double gravity = 1;
@@ -97,23 +86,21 @@ public class Player {
     /**
      * 构造玩家对象。
      *
-     * @param infiniteMap 地图引用，用于碰撞检测
+     * @param map 地图引用，用于碰撞检测
      * @param tileSize    方块大小（像素）
      */
-    public Player(InfiniteMap infiniteMap, int tileSize) {
-        this.infiniteMap = infiniteMap;
-        this.tileSize = tileSize;
+    public Player(InfiniteMap map, int tileSize) {
+        super(map, tileSize,
+                100,
+                ((double) WORLD_HEIGHT_TILES / 2) * tileSize - tileSize);
+        // 玩家碰撞盒：32px 视觉，内缩 3px（与物理一致），供实体间碰撞检测
+        setCollisionSize(tileSize - 6, tileSize - 6);
+        addTag(Tags.PLAYER);
 
-        // 出生点 X：靠左一些
-        currentX = 100;
-
-        // 出生点 Y：让玩家站在地面基准高度（世界中部）减去一个 tile 的高度
-        currentY = ((double) WORLD_HEIGHT_TILES / 2) * tileSize - tileSize;
-
-        previousX = currentX;
-        previousY = currentY;
-        renderX = currentX;
-        renderY = currentY;
+        previousX = x;
+        previousY = y;
+        renderX = x;
+        renderY = y;
 
         // 初始化自动跳跃系统
         autoJumpSystem = new AutoJumpSystem(tileSize);
@@ -144,12 +131,12 @@ public class Player {
      * 调用顺序：retick() → update()
      */
     public void retick() {
-        previousX = currentX;
-        previousY = currentY;
+        previousX = x;
+        previousY = y;
     }
 
     /**
-     * 玩家核心逻辑更新：读取输入状态，修改当前逻辑位置（currentX/currentY），
+     * 玩家核心逻辑更新：读取输入状态，修改当前逻辑位置（x/y），
      * 并更新动画计数器。
      * 采用轴分离碰撞检测（先 X 后 Y），与实心方块发生碰撞时自动吸附到方块边界。
      */
@@ -173,10 +160,10 @@ public class Player {
 
             jumpCount++;
             if (jumpCount == 1) {
-                velocityY = -jumpSpeed;
+                vy = -jumpSpeed;
                 jumpPhase = "first";
             } else if (jumpCount == 2) {
-                velocityY = -DOUBLE_JUMP_SPEED;
+                vy = -DOUBLE_JUMP_SPEED;
                 jumpPhase = "double";
             }
             jumpCooldownCounter = JUMP_COOLDOWN;
@@ -204,8 +191,8 @@ public class Player {
         }
 
         // --- 重力 ---
-        velocityY += gravity;
-        if (velocityY > maxFallSpeed) velocityY = maxFallSpeed;
+        vy += gravity;
+        if (vy > maxFallSpeed) vy = maxFallSpeed;
 
         double inset = 3;
         double colW = tileSize - 2 * inset;
@@ -215,8 +202,8 @@ public class Player {
         dx += dashVelocityX;
         dashVelocityX = 0;
         if (dx != 0) {
-            double newX = currentX + dx;
-            AABB box = new AABB(newX + inset, currentY + inset, colW, colH);
+            double newX = x + dx;
+            AABB box = new AABB(newX + inset, y + inset, colW, colH);
             int tStartX = (int) Math.floor(box.x / tileSize);
             int tEndX   = (int) Math.floor((box.x + box.width) / tileSize - EPSILON);
             int tStartY = Math.max(0, (int) Math.floor(box.y / tileSize));
@@ -226,14 +213,14 @@ public class Player {
             boolean triggeredAutoJump = false;
             for (int ty = tStartY; ty <= tEndY && !hit; ty++) {
                 for (int tx = tStartX; tx <= tEndX && !hit; tx++) {
-                    int type = infiniteMap.getTileType(tx, ty);
+                    int type = map.getTileType(tx, ty);
                     Block b = Block.fromId(type);
                     if (b != null && b.isSolid()) {
                         // 检测碰撞时是否需要自动跳跃
                         boolean shouldAutoJump = autoJumpSystem.handleCollisionTrigger(
-                            currentX, currentY, dx, velocityY, onGround,
+                            x, y, dx, vy, onGround,
                             jumpPhase.equals("first") || jumpPhase.equals("double"),
-                            keyS, infiniteMap
+                            keyS, map
                         );
 
                         if (shouldAutoJump) {
@@ -241,7 +228,7 @@ public class Player {
                             double requiredVY = autoJumpSystem.getRequiredVelocityY();
 
                             if (requiredVY != 0) {
-                                velocityY = requiredVY;
+                                vy = requiredVY;
 
                                 if (!onGround) {
                                     jumpCount = 1;
@@ -252,7 +239,7 @@ public class Player {
                             }
                             hit = true;
                             triggeredAutoJump = true;
-                            // 触发跳跃时保持 currentX 不变，避免卡入方块
+                            // 触发跳跃时保持 x 不变，避免卡入方块
                         } else {
                             if (dx > 0) {
                                 newX = tx * tileSize - inset - colW;
@@ -265,16 +252,16 @@ public class Player {
                     }
                 }
             }
-            // 只有当没有触发自动跳跃时才更新 currentX
+            // 只有当没有触发自动跳跃时才更新 x
             if (!triggeredAutoJump) {
-                currentX = newX;
+                x = newX;
             }
         }
 
         // --- Y 轴移动与碰撞（重力+跳跃） ---
         {
-            double newY = currentY + velocityY;
-            AABB box = new AABB(currentX + inset, newY + inset, colW, colH);
+            double newY = y + vy;
+            AABB box = new AABB(x + inset, newY + inset, colW, colH);
             int tStartX = (int) Math.floor(box.x / tileSize);
             int tEndX   = (int) Math.floor((box.x + box.width) / tileSize - EPSILON);
             int tStartY = Math.max(0, (int) Math.floor(box.y / tileSize));
@@ -283,10 +270,10 @@ public class Player {
             boolean hit = false;
             for (int ty = tStartY; ty <= tEndY && !hit; ty++) {
                 for (int tx = tStartX; tx <= tEndX && !hit; tx++) {
-                    int type = infiniteMap.getTileType(tx, ty);
+                    int type = map.getTileType(tx, ty);
                     Block b = Block.fromId(type);
                     if (b != null && b.isSolid()) {
-                        if (velocityY > VELOCITY_EPSILON) {
+                        if (vy > VELOCITY_EPSILON) {
                             // 下落时检测到碰撞，检查是否需要着陆优化
                             if (autoJumpSystem.isAutoJumping() && onGround) {
                                 autoJumpSystem.resetState();
@@ -300,19 +287,19 @@ public class Player {
                     }
                 }
             }
-            currentY = newY;
-            if (hit) velocityY = 0;
+            y = newY;
+            if (hit) vy = 0;
         }
 
         // --- 地面检测：检查脚下方块是否实心 ---
         boolean wasOnGround = onGround;
         onGround = false;
         {
-            double footY = currentY + inset + colH;
-            int tileX = (int) Math.floor((currentX + inset + colW / 2) / tileSize);
+            double footY = y + inset + colH;
+            int tileX = (int) Math.floor((x + inset + colW / 2) / tileSize);
             int tileY = (int) Math.floor(footY / tileSize);
             if (tileY >= 0 && tileY < WORLD_HEIGHT_TILES) {
-                int type = infiniteMap.getTileType(tileX, tileY);
+                int type = map.getTileType(tileX, tileY);
                 Block b = Block.fromId(type);
                 if (b != null && b.isSolid()) {
                     double blockTop = tileY * tileSize;
@@ -329,7 +316,7 @@ public class Player {
 
         // --- 世界边界限制 ---
         int maxY = WORLD_HEIGHT_TILES * tileSize - tileSize;
-        currentY = Math.min(Math.max(currentY, 0), maxY);
+        y = Math.min(Math.max(y, 0), maxY);
 
         // --- 站立动画计数器 ---
         incrementer++;
@@ -356,20 +343,20 @@ public class Player {
      *              中间值表示平滑过渡
      */
     public void interpolate(float alpha) {
-        renderX = previousX + (currentX - previousX) * alpha;
-        renderY = previousY + (currentY - previousY) * alpha;
+        renderX = previousX + (x - previousX) * alpha;
+        renderY = previousY + (y - previousY) * alpha;
     }
 
     /**
      * 设置玩家的位置（用于加载存档）。
-     * 同时更新 currentX/Y、previousX/Y 和 renderX/Y，确保插值正确。
+     * 同时更新 x/Y、previousX/Y 和 renderX/Y，确保插值正确。
      *
      * @param x 玩家 X 坐标（像素）
      * @param y 玩家 Y 坐标（像素）
      */
+    @Override
     public void setPosition(double x, double y) {
-        this.currentX = x;
-        this.currentY = y;
+        super.setPosition(x, y);
         this.previousX = x;
         this.previousY = y;
         this.renderX = x;

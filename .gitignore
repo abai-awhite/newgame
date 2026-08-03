@@ -6,7 +6,7 @@ target/
 
 ### 构建产物 / 数据 / 备份 ###
 out/
-world/
+/world/
 src/Rec/
 
 ### IntelliJ IDEA ###

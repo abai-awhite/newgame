@@ -14,6 +14,14 @@ import java.util.Map;
 public class BlocksData {
 
     public static final int T_AIR = 0;
+    /** Minecraft 扁平化数字 ID：水/岩浆 */
+    public static final int T_WATER = 32;
+    public static final int T_LAVA = 33;
+
+    /** 是否为流体方块（水/岩浆）。 */
+    public boolean isFluid(int id) {
+        return id == T_WATER || id == T_LAVA;
+    }
 
     /** 方块 ID -> 元数据 */
     public final Map<Integer, BlockMeta> byId = new HashMap<>();

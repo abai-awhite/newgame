@@ -21,6 +21,10 @@ public class WorldRenderer {
 
     public static final float TILE = 32f;
 
+    /** 水面线颜色（表面格顶部 2px 高光，让水体有清晰水面而非实心方块） */
+    private static final Color WATER_LINE = new Color(0.72f, 0.88f, 1f, 0.95f);
+    private static final Color LAVA_LINE = new Color(1f, 0.78f, 0.35f, 0.95f);
+
     /** 掉落物（服务器广播） */
     public static class DropView {
         public int id;
@@ -70,7 +74,21 @@ public class WorldRenderer {
                 Texture tex = texFactory.getTexture(type, meta);
                 float sx = (float) Math.floor(tx * TILE - camX);
                 float sy = (float) Math.floor(ty * TILE - camY);
-                batch.draw(tex, sx, UiKit.up(vh, sy + TILE), TILE, TILE);
+                if (type == BlocksData.T_WATER || type == BlocksData.T_LAVA) {
+                    // 流体按水位裁切：level = 欠满量（0 满格 ~ 15 最薄，一格最多 16 级），
+                    // 只画格子底部 h 像素；旧档 level 可能超 15，钳制为不画（当作已干涸）
+                    float h = Math.max(0, 16 - world.getLevel(tx, ty)) * TILE / 16f;
+                    if (h <= 0) continue;
+                    batch.draw(tex, sx, UiKit.up(vh, sy + TILE), TILE, h, 0, 0, (int) TILE, (int) h, false, false);
+                    // 表面格（上方非同型流体）画水面线，让水体有清晰水面（Terraria 式）
+                    if (world.getTile(tx, ty - 1) != type) {
+                        float topY = sy + TILE - h; // 水面实际高度的屏幕 y
+                        UiKit.rectR(batch, vh, sx, topY, TILE, 2,
+                                type == BlocksData.T_WATER ? WATER_LINE : LAVA_LINE, 0);
+                    }
+                } else {
+                    batch.draw(tex, sx, UiKit.up(vh, sy + TILE), TILE, TILE);
+                }
             }
         }
 
