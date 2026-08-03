@@ -42,10 +42,10 @@ public class FluidSim {
     public static final int FULL_AMOUNT = 16;
     /** 一格水最多 16 级（FULL_AMOUNT=16 单位）；水桶 = 一整格：舀水/倒水一次取/放一整格（Terraria 标准） */
     public static final int BUCKET_AMOUNT = FULL_AMOUNT;
-    /** 水每步侧向铺开最大转移量（整格：16 单位一步到位，水面快速流平无梯度） */
-    public static final int WATER_SPREAD_CAP = FULL_AMOUNT;
-    /** 岩浆每步侧向铺开最大转移量（更慢，半格） */
-    public static final int LAVA_SPREAD_CAP = FULL_AMOUNT / 2;
+    /** 水每步侧向铺开最大转移量（8 单位/步 = 半格，流动有动画感但快速） */
+    public static final int WATER_SPREAD_CAP = FULL_AMOUNT / 2;
+    /** 岩浆每步侧向铺开最大转移量（更慢，1/4 格） */
+    public static final int LAVA_SPREAD_CAP = FULL_AMOUNT / 4;
     /** 向下坠落每步最大转移量（整格）：下方是空气时直接整格下落；下方有水且不满时上方尽量下沉合并 */
     public static final int FALL_CAP = FULL_AMOUNT;
     /** 方块变更触发的更新半径（格）：变更点周围 9×9 区域全部触发更新 */
@@ -328,14 +328,22 @@ public class FluidSim {
                     }
                     if (sum <= 0 || maxA - minA <= 1) continue;
 
-                    // 均分（余数逐个 +1）
+                    // 渐进整平：排序后首尾配对同时转移，每对转移 (max-min)/2，
+                    // 一步靠近 50%，2-3 步收敛。总量精确守恒（每对一格减=另一格加）。
                     int n = group.size();
-                    long base = sum / n;
-                    int rem = (int) (sum % n);
-                    for (int i = 0; i < n; i++) {
-                        int a = (int) base + (i < rem ? 1 : 0);
-                        map.setTileTypeAndLevel(group.get(i)[0], group.get(i)[1],
-                                a <= 0 ? Chunk.AIR : type, levelOf(a));
+                    group.sort((a, b) -> Integer.compare(
+                            FULL_AMOUNT - map.getFluidLevel(a[0], a[1]),
+                            FULL_AMOUNT - map.getFluidLevel(b[0], b[1])));
+                    int pairs = n / 2;
+                    for (int i = 0; i < pairs; i++) {
+                        int[] lo = group.get(i), hi = group.get(n - 1 - i);
+                        int loAmt = FULL_AMOUNT - map.getFluidLevel(lo[0], lo[1]);
+                        int hiAmt = FULL_AMOUNT - map.getFluidLevel(hi[0], hi[1]);
+                        int transfer = (hiAmt - loAmt) / 2;
+                        if (transfer > 0) {
+                            map.setTileTypeAndLevel(hi[0], hi[1], type, levelOf(hiAmt - transfer));
+                            map.setTileTypeAndLevel(lo[0], lo[1], type, levelOf(loAmt + transfer));
+                        }
                     }
                 }
             }
