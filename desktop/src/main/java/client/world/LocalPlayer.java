@@ -25,14 +25,35 @@ public class LocalPlayer {
     public int jumpCooldown = 0;
     public boolean jumpKeyHeld = false;
 
-    // 冲刺
-    public int dashCharges = 5, dashMax = 5;
+    // 冲刺（3 次，脚下 3 个菱形显示）
+    public int dashCharges = 3, dashMax = 3;
     public boolean dashKeyHeld = false;
     public float dashVX = 0;
     public int dashRecharge = 0;
+    /** 冲刺菱形是否显示：满充能 3 秒后隐藏，再次冲刺时立即出现 */
+    public boolean dashGemsVisible = true;
+    private int dashFullTicks = 0;
 
     // 快捷栏槽位
     public int slot = 0;
+
+    // 血量 / 蓝条 / 饱食度
+    public int hp = 100, maxHp = 100;
+    public int mana = 100, maxMana = 100;
+    public int hunger = 20, maxHunger = 20;
+
+    // 攻击动作（剑/镐/斧挥砍、枪射击；32Hz tick 递减）
+    public int actionT = 0;
+    public String actionType = null;   // "swing" | "shoot"
+    public float aimX, aimY;           // 瞄准点（世界坐标，枪口朝向用）
+
+    /** 发起一次攻击动作 */
+    public void startAction(String type, float aimX, float aimY) {
+        this.actionType = type;
+        this.actionT = "shoot".equals(type) ? 6 : 8;
+        this.aimX = aimX;
+        this.aimY = aimY;
+    }
 
     // 自动跨步
     public boolean autoJumpActive = false;
@@ -62,9 +83,16 @@ public class LocalPlayer {
         onGround = false;
         direction = "null";
         jumpCount = 0; jumpPhase = "none";
-        dashCharges = dashMax = 5;
+        dashCharges = dashMax = 3;
+        dashGemsVisible = true;
+        dashFullTicks = 0;
         animFrame = 1; incrementer = 0;
         slot = 0;
+        hp = maxHp = 100;
+        mana = maxMana = 100;
+        hunger = maxHunger = 20;
+        actionT = 0;
+        actionType = null;
         crossGap = null;
         autoJumpActive = false;
     }
@@ -130,6 +158,13 @@ public class LocalPlayer {
         if (dashCharges < dashMax && dashRecharge++ >= 100) {
             dashCharges++;
             dashRecharge = 0;
+        }
+        // 菱形显示：满充能 3 秒后隐藏（32Hz → 96 tick），再次冲刺立即出现
+        if (dashCharges >= dashMax) {
+            if (++dashFullTicks > 96) dashGemsVisible = false;
+        } else {
+            dashFullTicks = 0;
+            dashGemsVisible = true;
         }
 
         // 重力（水中减半、落速上限降低；浮力抵消部分下沉）
@@ -284,6 +319,8 @@ public class LocalPlayer {
         }
         if (autoJumpRecovery > 0) autoJumpRecovery--;
         if (dashFx > 0) dashFx--;
+        // 攻击动作计时
+        if (actionT > 0) actionT--;
     }
 
     /** 冲刺特效状态：剩余 tick（32Hz 递减），dashFxDir=-1 左 / 1 右 */

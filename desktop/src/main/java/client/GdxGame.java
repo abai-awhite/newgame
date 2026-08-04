@@ -18,13 +18,17 @@ import org.json.JSONObject;
 import client.data.BlockMeta;
 import client.data.BlocksData;
 import client.data.ZhName;
+import client.hud.HudRenderer;
 import client.net.NetClient;
+import client.render.ActionRenderer;
 import client.render.PlayerTextures;
 import client.render.TextureFactory;
+import client.render.ToolTextures;
 import client.render.WorldRenderer;
 import client.render.WorldRenderer.DropView;
 import client.render.WorldRenderer.RemotePlayer;
 import client.render.WorldRenderer.Selection;
+import client.tool.Tool;
 import client.ui.UiKit;
 import client.world.ClientWorld;
 import client.world.LocalPlayer;
@@ -54,9 +58,11 @@ public class GdxGame extends ApplicationAdapter {
     static final int MAX_INTERACT_DISTANCE = 6;
     static final int COOLDOWN_BREAK = 5;
     static final int COOLDOWN_PLACE = 5;
+    /** 枪连发射速（tick）：约 5 发/秒 */
+    static final int GUN_FIRE_CD = 6;
     static final int AUTO_SELECT_RADIUS = 3;
-    static final int INVENTORY_TOTAL = 45;
-    static final int HOTBAR_SIZE = 9;
+    public static final int INVENTORY_TOTAL = 45;
+    public static final int HOTBAR_SIZE = 9;
     static final int MAX_STACK = 256;
 
     static final String WS_DEFAULT = "ws://127.0.0.1:8081";
@@ -68,29 +74,29 @@ public class GdxGame extends ApplicationAdapter {
     static final float ESC_ANIM_DUR = 0.25f;
 
     /** 背包开启动画时长（秒） */
-    static final float INV_ANIM_DUR = 0.25f;
+    public static final float INV_ANIM_DUR = 0.25f;
 
     // ==================== 枚举与内部类 ====================
 
     enum Screen { MENU, WORLD_SELECT, GAME }
 
     /** 背包槽位 */
-    static class ItemSlot {
-        String name;
-        int count;
+    public static class ItemSlot {
+        public String name;
+        public int count;
 
-        ItemSlot(String name, int count) {
+        public ItemSlot(String name, int count) {
             this.name = name;
             this.count = count;
         }
     }
 
     /** 拖拽中的物品堆 */
-    static class Dragging {
-        ItemSlot item;
-        int source;
+    public static class Dragging {
+        public ItemSlot item;
+        public int source;
 
-        Dragging(ItemSlot item, int source) {
+        public Dragging(ItemSlot item, int source) {
             this.item = item;
             this.source = source;
         }
@@ -162,7 +168,12 @@ public class GdxGame extends ApplicationAdapter {
     private BlocksData blocks;
     private TextureFactory texFactory;
     private PlayerTextures playerTex;
+    private ToolTextures toolTex;
     private WorldRenderer renderer;
+    /** HUD 渲染（菱形/状态条/快捷栏/背包） */
+    private HudRenderer hud;
+    /** 玩家动作渲染（挥砍/射击/子弹） */
+    private ActionRenderer actions;
 
     // ==================== 状态 ====================
 
@@ -189,10 +200,6 @@ public class GdxGame extends ApplicationAdapter {
     private boolean escOpen;
     /** ESC 菜单开启动画进度（0→1，秒） */
     private float escAnimT;
-    /** 背包开启动画进度（0→1，秒） */
-    private float invAnimT;
-    /** 背包滑入当前垂直偏移（命中换算用，打开时从下往上滑） */
-    private float invSlide;
     /** UI 缩放：虚拟分辨率 → 窗口（等比适配） */
     private float uiScale = 1f, uiOffX = 0f, uiOffY = 0f;
     /** 窗口物理尺寸（世界层用） */
@@ -204,14 +211,24 @@ public class GdxGame extends ApplicationAdapter {
     private boolean settingsOpen;
     private boolean settingsFromGame;
     private boolean debugShown;
+    /** F3+B：显示所有实体碰撞箱 */
+    private boolean showHitboxes;
 
     private boolean multiOpen;
     private boolean autoSelectEnabled = true;
     private boolean autoStepEnabled = true;
+    /** 血量显示位置：0=玩家头顶 1=物品栏上方左侧（Minecraft 式） */
+    private int hpBarPos;
+    /** 蓝条位置：0=玩家右侧竖条 1=物品栏上方血条下方 */
+    private int manaBarPos;
+    /** 饱食度位置：0=玩家左侧竖条 1=物品栏上方血条右侧 */
+    private int hungerBarPos;
 
     // 鼠标（屏幕坐标 y 向下）
     private float mouseX, mouseY;
     private boolean mouseLeft, mouseRight;
+    /** 攻击动作冷却（tick）：枪连发射速控制 */
+    private int attackCd;
 
     private int breakCooldown, placeCooldown;
     /** Q 扔出：按住连续抛（keyDown 置 true / keyUp 置 false），qThrowCd 为抛出间隔（tick） */
@@ -229,6 +246,7 @@ public class GdxGame extends ApplicationAdapter {
     // 多人 / 掉落物
     private final Map<String, RemotePlayer> remotes = new HashMap<>();
     private List<DropView> drops = new ArrayList<>();
+    private List<WorldRenderer.MobView> mobs = new ArrayList<>();
 
     // 冲刺粒子（世界坐标，向后拖尾）
     private static final int DASH_P_MAX = 90;
@@ -243,6 +261,8 @@ public class GdxGame extends ApplicationAdapter {
     // 网络
     private NetClient net;
     private NetClient menuNet;
+    /** 内嵌后端服务器（单人模式同 JVM 启动，避免拉子进程重复读 jar） */
+    private server.GameServer embeddedServer;
     private String pendingWorld;
     private String pendingEnterWorld;
     private int menuWsSeq;
@@ -254,8 +274,6 @@ public class GdxGame extends ApplicationAdapter {
     // 提示
     private String bannerText;
     private long bannerUntil;
-    private String slotNameToastText;
-    private long slotNameToastUntil;
     private String menuErrorText;
     private long menuErrorUntil;
     private String worldErrorText;
@@ -284,6 +302,9 @@ public class GdxGame extends ApplicationAdapter {
     private UiKit.Button btnResetKeys;
     private UiKit.Button toggleAutoJump;
     private UiKit.Button chkAutoSelect;
+    private UiKit.Button hpBarToggle;
+    private UiKit.Button manaBarToggle;
+    private UiKit.Button hungerBarToggle;
     private final List<KeyRow> keyRows = new ArrayList<>();
     private final List<WorldCard> worldCards = new ArrayList<>();
 
@@ -293,6 +314,9 @@ public class GdxGame extends ApplicationAdapter {
     public void create() {
         autoSelectEnabled = ClientPrefs.getBoolean("autoSelect", true);
         autoStepEnabled = ClientPrefs.getBoolean("autoJump", true);
+        hpBarPos = ClientPrefs.getInt("hpBarPos", 0);
+        manaBarPos = ClientPrefs.getInt("manaBarPos", 0);
+        hungerBarPos = ClientPrefs.getInt("hungerBarPos", 0);
         batch = new SpriteBatch();
         try {
             UiKit.loadFonts();
@@ -303,7 +327,10 @@ public class GdxGame extends ApplicationAdapter {
         blocks = BlocksData.load(fh);
         texFactory = new TextureFactory();
         playerTex = new PlayerTextures();
+        toolTex = new ToolTextures();
         renderer = new WorldRenderer();
+        hud = new HudRenderer(blocks, texFactory, toolTex);
+        actions = new ActionRenderer(toolTex);
 
         net = new NetClient(new NetClient.Listener() {
             @Override
@@ -390,7 +417,12 @@ public class GdxGame extends ApplicationAdapter {
     public void dispose() {
         net.disconnect();
         menuNet.disconnect();
+        if (embeddedServer != null) {
+            embeddedServer.shutdown();
+            embeddedServer = null;
+        }
         if (playerTex != null) playerTex.dispose();
+        if (toolTex != null) toolTex.dispose();
         if (texFactory != null) texFactory.dispose();
         if (batch != null) batch.dispose();
     }
@@ -414,6 +446,8 @@ public class GdxGame extends ApplicationAdapter {
                 localTick();
                 acc -= TICK_INTERVAL;
             }
+            actions.update(delta, world, blocks, mobs, mobId -> send(new JSONObject()
+                    .put("type", "attackMob").put("mobId", mobId).put("dmg", 15)));
         } else {
             acc = 0;
         }
@@ -512,9 +546,52 @@ public class GdxGame extends ApplicationAdapter {
     private void updateInteractions() {
         if (breakCooldown > 0) breakCooldown--;
         if (placeCooldown > 0) placeCooldown--;
+        if (attackCd > 0) attackCd--;
         updateSelection();
+        // 左键按住：武器连续攻击（枪按射速连发，剑/镐/斧挥砍动画结束后循环）
+        if (mouseLeft) tryPlayerAction();
         handleBreaking();
         handlePlacing();
+    }
+
+    /** 手持武器/工具时的攻击动作：按 Tool 的工作方式执行（枪=射击，其余=挥砍） */
+    private void tryPlayerAction() {
+        if (paused || inventoryOpen) return;
+        ItemSlot s = inventory[player.slot];
+        if (s == null || s.count <= 0) return;
+        Tool tool = Tool.byId(s.name);
+        if (tool == null) return;   // 非工具不触发动作
+        float mx = mousePX + camX;
+        float my = mousePY + camY;
+        if ("shoot".equals(tool.actionType)) {
+            if (attackCd > 0) return;
+            attackCd = GUN_FIRE_CD;
+            player.startAction("shoot", mx, my);
+            actions.spawnBullet(player.x + TILE / 2f, player.y + TILE / 2f, mx, my);
+        } else {
+            if (player.actionT > 0) return;   // 挥砍动画未结束不重开
+            player.startAction("swing", mx, my);
+            // 剑/镐/斧挥砍：检测附近怪物命中（玩家中心 48px 范围内）
+            float pcx = player.x + TILE / 2f, pcy = player.y + TILE / 2f;
+            for (WorldRenderer.MobView m : mobs) {
+                if (Math.abs(m.x - pcx) < 48 && Math.abs(m.y - pcy) < 48) {
+                    send(new JSONObject().put("type", "attackMob")
+                            .put("mobId", m.id).put("dmg", 20));
+                }
+            }
+        }
+    }
+
+    /** 是否为武器（不破坏方块的工具，如剑/枪）：手持时左键只做攻击，不破坏方块 */
+    private boolean isWeapon(String name) {
+        Tool tool = Tool.byId(name);
+        return tool != null && !tool.breaksBlocks;
+    }
+
+    /** 当前手持物品名（空槽返回 null） */
+    private String heldItemName() {
+        ItemSlot s = inventory[player.slot];
+        return (s != null && s.count > 0) ? s.name : null;
     }
 
     private void updateSelection() {
@@ -569,6 +646,9 @@ public class GdxGame extends ApplicationAdapter {
 
     private void handleBreaking() {
         if (!mouseLeft || breakCooldown > 0 || paused || inventoryOpen) return;
+        // 手持武器（剑/枪）时不破坏方块：左键只做攻击动作
+        ItemSlot held = inventory[player.slot];
+        if (held != null && isWeapon(held.name)) return;
         Selection sel = selected;
         if (sel == null) return;
         if (!isWithinRange(sel.x, sel.y)) return;
@@ -745,12 +825,13 @@ public class GdxGame extends ApplicationAdapter {
     }
 
     private void initDefaultInventory() {
-        // 初始物品使用真实方块名（小写，与服务器 BlockTypeMapper 匹配；web 版大写名实际不可放置）
+        // 初始物品：武器/工具在前，方块在后（小写名，与服务器 BlockTypeMapper 匹配）
         String[][] defaults = {
+                {"sword", "1"}, {"gun", "1"}, {"pickaxe", "1"}, {"axe", "1"},
                 {"grass_block", "64"}, {"dirt", "64"}, {"stone", "64"},
                 {"sand", "64"}, {"oak_log", "64"}, {"bucket", "1"},
         };
-        for (int i = 0; i < defaults.length && i < HOTBAR_SIZE; i++) {
+        for (int i = 0; i < defaults.length; i++) {
             inventory[i] = new ItemSlot(defaults[i][0], Integer.parseInt(defaults[i][1]));
         }
         syncInventory();
@@ -759,7 +840,7 @@ public class GdxGame extends ApplicationAdapter {
     private void toggleInventory() {
         inventoryOpen = !inventoryOpen;
         if (inventoryOpen) {
-            invAnimT = 0;
+            hud.openInventory();
             invPlayerTexture = playerTex.get(player.direction, player.animFrame);
         } else {
             if (draggingItem != null) {
@@ -942,6 +1023,15 @@ public class GdxGame extends ApplicationAdapter {
                 }
                 JSONArray dropList = msg.optJSONArray("drops");
                 if (dropList != null) applyServerDrops(dropList);
+                JSONArray mobList = msg.optJSONArray("mobs");
+                if (mobList != null) applyServerMobs(mobList);
+                break;
+            }
+            case "mobHit": {
+                // 服务器权威：怪物接触玩家 → 扣减本地生命值
+                int dmg = msg.optInt("dmg", 5);
+                player.hp -= dmg;
+                if (player.hp < 0) player.hp = 0;
                 break;
             }
             case "dropPickup": {
@@ -1052,6 +1142,22 @@ public class GdxGame extends ApplicationAdapter {
         drops = next;
     }
 
+    private void applyServerMobs(JSONArray list) {
+        List<WorldRenderer.MobView> next = new ArrayList<>();
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject m = list.getJSONObject(i);
+            WorldRenderer.MobView mv = new WorldRenderer.MobView();
+            mv.id = m.optInt("id");
+            mv.x = (float) m.optDouble("x", 0);
+            mv.y = (float) m.optDouble("y", 0);
+            mv.hp = m.optInt("hp", 0);
+            mv.maxHp = m.optInt("maxHp", 30);
+            mv.hurt = m.optBoolean("hurt", false);
+            next.add(mv);
+        }
+        mobs = next;
+    }
+
     // ==================== 菜单 / 世界选择流程 ====================
 
     private void showMenu() {
@@ -1073,7 +1179,21 @@ public class GdxGame extends ApplicationAdapter {
         if (worldSeedField == null) worldSeedField = new UiKit.TextField(0, 0, 240, 42);
         if (worldNameField.text.isEmpty()) worldNameField.text = ClientPrefs.getString("lastWorldName", "block world");
         if (worldSeedField.text.isEmpty()) worldSeedField.text = randomSeedText();
-        openMenuConnection();
+        // 直接从 world/ 目录读取世界列表，不依赖服务器
+        refreshLocalWorldList();
+    }
+
+    /** 从 world/ 目录直接读取世界列表（不经过服务器）。 */
+    private void refreshLocalWorldList() {
+        worldsList.clear();
+        try {
+            java.util.List<server.WorldStore.WorldMeta> worlds = server.WorldStore.listWorlds();
+            for (server.WorldStore.WorldMeta w : worlds) {
+                worldsList.add(new WorldInfo(w.name, w.seedHash));
+            }
+        } catch (Exception e) {
+            System.err.println("读取世界列表失败: " + e.getMessage());
+        }
     }
 
     private void openMenuConnection() {
@@ -1091,7 +1211,38 @@ public class GdxGame extends ApplicationAdapter {
         closeMenuConnection();
         pendingWorld = name;
         ClientPrefs.putString("lastWorldName", name);
+        // 同 JVM 内启动后端（单人模式，端口空闲时；已占用则连接已有服务器）
+        startEmbeddedServer(name);
         startGameSession(null);
+    }
+
+    /** 同 JVM 内启动后端服务器（不拉子进程，避免重复读 jar）。端口已占用则跳过。 */
+    private void startEmbeddedServer(String worldName) {
+        int port = 8081;
+        if (isPortOpen(port)) {
+            System.out.println("[内嵌服务器] 端口 " + port + " 已占用，连接已有服务器");
+            return;
+        }
+        try {
+            server.ServerConfig config = server.ServerConfig.load("server/config.json");
+            server.WorldStore.WorldMeta meta = server.WorldStore.loadMeta(worldName);
+            long seed = (meta != null) ? meta.seed : config.seed;
+            embeddedServer = new server.GameServer(port, seed, worldName, config.chunkThreads, config.maxPlayers);
+            embeddedServer.start();
+            System.out.println("[内嵌服务器] 已启动 ws://localhost:" + port + " 世界=" + worldName + " 种子=" + seed);
+        } catch (Exception e) {
+            System.err.println("[内嵌服务器] 启动失败: " + e.getMessage());
+            embeddedServer = null;
+        }
+    }
+
+    private static boolean isPortOpen(int port) {
+        try (java.net.Socket s = new java.net.Socket()) {
+            s.connect(new java.net.InetSocketAddress("127.0.0.1", port), 300);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String randomSeedText() {
@@ -1122,6 +1273,7 @@ public class GdxGame extends ApplicationAdapter {
         remotes.clear();
         drops = new ArrayList<>();
         player.reset();
+        actions.clear();
         acc = 0;
         Arrays.fill(inventory, null);
         initDefaultInventory();
@@ -1132,10 +1284,12 @@ public class GdxGame extends ApplicationAdapter {
         settingsOpen = false;
         settingsFromGame = false;
         debugShown = false;
+        showHitboxes = false;
         hoverIndex = -1;
-        slotNameToastText = null;
+        hud.setSlotToast(null);
         mouseLeft = false;
         mouseRight = false;
+        attackCd = 0;
         breakCooldown = 0;
         placeCooldown = 0;
         showBanner("正在连接服务器...", Long.MAX_VALUE);
@@ -1148,8 +1302,12 @@ public class GdxGame extends ApplicationAdapter {
     }
 
     private void deleteWorld(String name) {
-        if (menuNet.isConnected()) {
-            menuNet.send(new JSONObject().put("type", "deleteWorld").put("name", name));
+        // 直接在本地删除世界（不依赖服务器）
+        try {
+            server.WorldStore.deleteWorld(name);
+            refreshLocalWorldList();
+        } catch (Exception e) {
+            showWorldError("删除世界失败: " + e.getMessage());
         }
     }
 
@@ -1158,12 +1316,13 @@ public class GdxGame extends ApplicationAdapter {
                 ? "block world" : worldNameField.text.trim();
         String seed = worldSeedField == null ? "" : worldSeedField.text.trim();
         ClientPrefs.putString("lastWorldName", name);
-        if (!menuNet.isConnected()) {
-            showWorldError("未连接服务器");
-            return;
+        // 直接在本地创建世界（不依赖服务器）
+        try {
+            server.WorldStore.WorldMeta meta = server.WorldStore.createWorld(name, seed);
+            enterWorld(meta.name);
+        } catch (Exception e) {
+            showWorldError("创建世界失败: " + e.getMessage());
         }
-        pendingEnterWorld = name;
-        menuNet.send(new JSONObject().put("type", "createWorld").put("name", name).put("seed", seed));
     }
 
     private void closeSettings() {
@@ -1376,7 +1535,7 @@ public class GdxGame extends ApplicationAdapter {
             mouseX = (sx - uiOffX) / uiScale;
             mouseY = (sy - uiOffY) / uiScale;
             if (screen == Screen.GAME && inventoryOpen) {
-                hoverIndex = invSlotAt(mouseX, mouseY);
+                hoverIndex = hud.invSlotAt(mouseX, mouseY);
             }
             return true;
         }
@@ -1389,7 +1548,7 @@ public class GdxGame extends ApplicationAdapter {
             mouseX = (sx - uiOffX) / uiScale;
             mouseY = (sy - uiOffY) / uiScale;
             if (screen == Screen.GAME && inventoryOpen) {
-                hoverIndex = invSlotAt(mouseX, mouseY);
+                hoverIndex = hud.invSlotAt(mouseX, mouseY);
             }
             return true;
         }
@@ -1447,6 +1606,11 @@ public class GdxGame extends ApplicationAdapter {
         // 5. 调试界面
         if (code != null && "f3".equals(actionForCode(code))) {
             debugShown = !debugShown;
+            return;
+        }
+        // F3+B：显示碰撞箱（仅在调试界面打开时生效）
+        if (debugShown && keycode == Input.Keys.B) {
+            showHitboxes = !showHitboxes;
             return;
         }
 
@@ -1529,11 +1693,10 @@ public class GdxGame extends ApplicationAdapter {
     private void showSlotName() {
         ItemSlot item = inventory[player.slot];
         if (item == null) {
-            slotNameToastText = null;
+            hud.setSlotToast(null);
             return;
         }
-        slotNameToastText = ZhName.zhBlockName(item.name, blocks);
-        slotNameToastUntil = System.currentTimeMillis() + 5000;
+        hud.setSlotToast(ZhName.zhBlockName(item.name, blocks));
     }
 
     // ==================== 点击处理 ====================
@@ -1612,7 +1775,7 @@ public class GdxGame extends ApplicationAdapter {
     }
 
     private void handleInventoryClick(float x, float y, int button) {
-        int idx = invSlotAt(x, y);
+        int idx = hud.invSlotAt(x, y);
         if (idx < 0) return;
         slotClick(idx, button == 1);
     }
@@ -1688,6 +1851,18 @@ public class GdxGame extends ApplicationAdapter {
                 autoSelectEnabled = !autoSelectEnabled;
                 ClientPrefs.putBoolean("autoSelect", autoSelectEnabled);
             }
+            if (hpBarToggle != null && hpBarToggle.hit(x, y)) {
+                hpBarPos = (hpBarPos == 0) ? 1 : 0;
+                ClientPrefs.putInt("hpBarPos", hpBarPos);
+            }
+            if (manaBarToggle != null && manaBarToggle.hit(x, y)) {
+                manaBarPos = (manaBarPos == 0) ? 1 : 0;
+                ClientPrefs.putInt("manaBarPos", manaBarPos);
+            }
+            if (hungerBarToggle != null && hungerBarToggle.hit(x, y)) {
+                hungerBarPos = (hungerBarPos == 0) ? 1 : 0;
+                ClientPrefs.putInt("hungerBarPos", hungerBarPos);
+            }
         }
     }
 
@@ -1697,13 +1872,24 @@ public class GdxGame extends ApplicationAdapter {
         // 世界层：物理窗口坐标（背景+地图铺满整个窗口，无黑边/空缺）
         batch.setProjectionMatrix(worldProj);
         renderer.draw(batch, (int) winW, (int) winH, world, blocks, texFactory, playerTex,
-                camX, camY, player, drops, remotes, myPlayerId, selected);
+                camX, camY, player, drops, remotes, myPlayerId, mobs, selected, showHitboxes);
+        hud.drawWorld(batch, (int) winW, (int) winH, camX, camY, player,
+                hpBarPos == 0, manaBarPos, hungerBarPos);
+        actions.draw(batch, (int) winH, camX, camY, player, heldItemName(), showHitboxes);
+        if (showHitboxes) {
+            actions.drawHitboxes(batch, (int) winH, camX, camY);
+        }
         drawDashParticles((int) winW, (int) winH);
         // UI 层：虚拟坐标（缩放居中）
         batch.setProjectionMatrix(uiProj);
-        if (!inventoryOpen) drawHotbar(vw, vh);
-        drawSlotNameToast(vw, vh);
-        if (inventoryOpen) drawInventory(vw, vh);
+        if (inventoryOpen) {
+            hud.drawInventory(batch, vw, vh, inventory, player, invPlayerTexture,
+                    hoverIndex, draggingItem, mouseX, mouseY);
+        } else {
+            hud.drawStatusBars(batch, vw, vh, player, hpBarPos, manaBarPos, hungerBarPos);
+            hud.drawHotbar(batch, vw, vh, inventory, player);
+            hud.drawSlotToast(batch, vw, vh);
+        }
         if (escOpen) drawEsc(vw, vh);
         if (settingsOpen) drawSettings(vw, vh);
         if (debugShown) drawDebug(vw, vh);
@@ -1712,86 +1898,14 @@ public class GdxGame extends ApplicationAdapter {
         }
     }
 
-    // ---------- 快捷栏 ----------
-
-    private void drawHotbar(int vw, int vh) {
-        float barW = 512, barH = 64;
-        float bx = (vw - barW) / 2f;
-        float by = vh - 12 - barH;
-        UiKit.rect(batch, vh, bx, by, barW, barH, new Color(0, 0, 0, 0.55f));
-        UiKit.frame(batch, vh, bx, by, barW, barH, 1, new Color(1, 1, 1, 0.2f));
-        for (int i = 0; i < HOTBAR_SIZE; i++) {
-            float sx = bx + 6 + i * (52 + 4);
-            float sy = by + 6;
-            boolean sel = i == player.slot;
-            UiKit.rect(batch, vh, sx, sy, 52, 52,
-                    sel ? new Color(0.47f, 0.47f, 0.47f, 0.9f) : new Color(0.235f, 0.235f, 0.235f, 0.7f));
-            UiKit.frame(batch, vh, sx, sy, 52, 52, 2,
-                    sel ? new Color(1, 1, 1, 1) : new Color(1, 1, 1, 0.35f));
-            ItemSlot item = inventory[i];
-            if (item != null) {
-                // 材质包为 32×32，图标按 32×32 原样绘制（槽 52px，居中留 10px）
-                drawItemIcon(item.name, item.count, sx + 10, sy + 10, 32, true, vh);
-            }
-        }
-    }
-
-    /** 物品图标（方块纹理 / 非方块兜底色+首字母），size 为显示尺寸 */
-    private void drawItemIcon(String name, int count, float x, float y, float size, boolean showCount, int vh) {
-        int tileId = blocks.tileId(name);
-        if ("bucket".equals(name) || "water_bucket".equals(name) || "lava_bucket".equals(name)) {
-            // 桶：固定颜色（灰/蓝/橙），无方块纹理
-            Color c = "water_bucket".equals(name) ? new Color(0.35f, 0.55f, 0.95f, 1)
-                    : "lava_bucket".equals(name) ? new Color(0.95f, 0.5f, 0.15f, 1)
-                    : new Color(0.62f, 0.62f, 0.66f, 1);
-            UiKit.rectR(batch, vh, x, y, size, size, c, 0);
-            UiKit.frameR(batch, vh, x, y, size, size, new Color(0, 0, 0, 0.6f), 0);
-            char ch = Character.toUpperCase(name.charAt(0));
-            UiKit.text(batch, vh, UiKit.fontSmall, String.valueOf(ch),
-                    x + size / 2, y + size / 2, Color.WHITE);
-        } else if (tileId >= 0) {
-            Texture t = texFactory.getTexture(tileId, blocks.meta(tileId));
-            batch.draw(t, x + (size - 32) / 2f, UiKit.up(vh, y + (size - 32) / 2f + 32), 32, 32);
-        } else {
-            UiKit.rectR(batch, vh, x, y, size, size, TextureFactory.fallbackColor(name), 0);
-            UiKit.frameR(batch, vh, x, y, size, size, new Color(0, 0, 0, 0.6f), 0);
-            char ch = name.isEmpty() ? '?' : Character.toUpperCase(name.charAt(0));
-            UiKit.text(batch, vh, UiKit.fontSmall, String.valueOf(ch),
-                    x + size / 2, y + size / 2, Color.WHITE);
-        }
-        if (showCount && count > 1) {
-            UiKit.text(batch, vh, UiKit.fontSmall, String.valueOf(count),
-                    x + size - 8, y + size - 12, Color.WHITE);
-        }
-    }
-
-    // ---------- 快捷栏切换提示 ----------
-
-    private void drawSlotNameToast(int vw, int vh) {
-        long now = System.currentTimeMillis();
-        if (slotNameToastText == null || now >= slotNameToastUntil) return;
-        float alpha = 1f;
-        if (now >= slotNameToastUntil - 1000) {
-            alpha = Math.max(0, (slotNameToastUntil - now) / 1000f);
-        }
-        float tw = UiKit.textWidth(UiKit.fontNormal, slotNameToastText);
-        float w = tw + 30, h = 28;
-        float x = vw / 2 - w / 2;
-        float y = vh - 108;
-        Color bg = new Color(0, 0, 0, 0.62f * alpha);
-        UiKit.rect(batch, vh, x, y, w, h, bg);
-        UiKit.frame(batch, vh, x, y, w, h, 1, new Color(1, 1, 1, 0.5f * alpha));
-        UiKit.text(batch, vh, UiKit.fontNormal, slotNameToastText, vw / 2, y + h / 2,
-                new Color(1, 1, 1, alpha));
-    }
-
     // ---------- 调试 ----------
 
     private void drawDebug(int vw, int vh) {
         String[] lines = {
                 "FPS: " + Gdx.graphics.getFramesPerSecond(),
-                "位置: X=" + (int) ((player.x + TILE / 2 - spawnX) / TILE)
-                        + ", Y=" + (int) ((spawnY - (player.y + TILE / 2)) / TILE),
+                "位置: X=" + (int) Math.floor((player.x - spawnX) / TILE)
+                        + ", Y=" + (int) Math.floor((spawnY - player.y) / TILE)
+                        + " (格子)",
                 "朝向: " + player.direction + "  跳跃: " + player.jumpPhase,
                 "Vy: " + String.format(Locale.ROOT, "%.1f", player.vy) + "  地面: " + player.onGround,
                 "冲刺: " + player.dashCharges + "/" + player.dashMax,
@@ -1818,185 +1932,6 @@ public class GdxGame extends ApplicationAdapter {
         UiKit.rect(batch, vh, x, y, w, h, new Color(0, 0, 0, 0.72f));
         UiKit.frame(batch, vh, x, y, w, h, 1, new Color(1, 1, 1, 0.4f));
         UiKit.text(batch, vh, UiKit.fontNormal, bannerText, vw / 2, y + h / 2, Color.WHITE);
-    }
-
-    // ---------- 背包面板（三栏，对应 style.css） ----------
-
-    private float panelX(int vw) {
-        return (vw - 896) / 2f;
-    }
-
-    private float panelY(int vh) {
-        // 背包底端与快捷栏底端对齐（快捷栏底端距屏底 12px）
-        return vh - 12 - 284;
-    }
-
-    private float gridX(int vw) {
-        return panelX(vw) + 14 + 180 + 12;
-    }
-
-    private float gridY(int vh) {
-        return panelY(vh) + 14;
-    }
-
-    /** 计算屏幕坐标对应背包槽索引；不在网格返回 -1 */
-    private int invSlotAt(float mx, float my) {
-        float gx = gridX((int) VIEW_W);
-        float gy = gridY((int) VIEW_H) + invSlide;   // 面板滑入时命中位置同步下移
-        for (int row = 0; row < 5; row++) {
-            for (int col = 0; col < 9; col++) {
-                float sx = gx + col * (48 + 4);
-                float sy = gy + row * (48 + 4);
-                if (mx >= sx && mx <= sx + 48 && my >= sy && my <= sy + 48) {
-                    return row * 9 + col;
-                }
-            }
-        }
-        return -1;
-    }
-
-    private void drawInventory(int vw, int vh) {
-        // 开启动画：面板从下方向上方滑入 + 淡入（缓出）
-        invAnimT = Math.min(invAnimT + Gdx.graphics.getDeltaTime(), INV_ANIM_DUR);
-        float p = invAnimT / INV_ANIM_DUR;
-        p = 1f - (1f - p) * (1f - p) * (1f - p);
-        invSlide = (1f - p) * vh * 0.3f;
-        UiKit.globalAlpha = p;
-        float px = panelX(vw);
-        float py = panelY(vh) + invSlide;
-        float panelW = 896, panelH = 284;
-        UiKit.panel(batch, vh, px, py, panelW, panelH, new Color(0.118f, 0.118f, 0.157f, 0.92f));
-
-        float pad = 14;
-
-        // ---- 左侧：玩家形象（上 2/3）+ 盔甲（下 1/3） ----
-        float lx = px + pad;
-        float lw = 180;
-        float contentH = 256;
-        float playerH = contentH * 2f / 3f;
-        float armorH = contentH - playerH - 6;
-        float pvY = py + pad;
-        UiKit.rect(batch, vh, lx, pvY, lw, playerH, new Color(0.078f, 0.078f, 0.11f, 0.85f));
-        UiKit.frame(batch, vh, lx, pvY, lw, playerH, 1, new Color(1, 1, 1, 0.18f));
-        if (invPlayerTexture != null) {
-            float is = 160;
-            float ix = lx + (lw - is) / 2;
-            float iy = pvY + (playerH - is) / 2;
-            batch.draw(invPlayerTexture, ix, UiKit.up(vh, iy + is), is, is);
-        }
-        float armY = pvY + playerH + 6;
-        UiKit.rect(batch, vh, lx, armY, lw, armorH, new Color(0.078f, 0.078f, 0.11f, 0.85f));
-        UiKit.frame(batch, vh, lx, armY, lw, armorH, 1, new Color(1, 1, 1, 0.18f));
-        String[] armorLabels = {"上盔甲", "腰带", "下盔甲"};
-        for (int i = 0; i < 3; i++) {
-            float ay = armY + 4 + i * ((armorH - 8) / 3f);
-            UiKit.rect(batch, vh, lx + 6, ay, 24, 24, new Color(0.235f, 0.235f, 0.275f, 0.7f));
-            UiKit.frame(batch, vh, lx + 6, ay, 24, 24, 2, new Color(1, 1, 1, 0.25f));
-            UiKit.textLeft(batch, vh, UiKit.fontSmall, armorLabels[i], lx + 36, ay + 6, new Color(0.78f, 0.78f, 0.83f, 1));
-        }
-
-        // ---- 中间：9×5 网格 ----
-        float gx = gridX(vw);
-        float gy = gridY(vh);
-        for (int row = 0; row < 5; row++) {
-            for (int col = 0; col < 9; col++) {
-                int idx = row * 9 + col;
-                float sx = gx + col * (48 + 4);
-                float sy = gy + row * (48 + 4);
-                Color border = new Color(1, 1, 1, 0.25f);
-                if (idx < HOTBAR_SIZE) border = new Color(0.71f, 0.71f, 1f, 0.5f);
-                if (idx == player.slot) border = Color.WHITE;
-                UiKit.rect(batch, vh, sx, sy, 48, 48, new Color(0.235f, 0.235f, 0.275f, 0.7f));
-                UiKit.frame(batch, vh, sx, sy, 48, 48, 2, border);
-                ItemSlot item = inventory[idx];
-                if (item != null) {
-                    drawItemIcon(item.name, item.count, sx + 8, sy + 8, 32, true, vh);
-                }
-            }
-        }
-
-        // ---- 右侧：合成（上 1/2）+ 详情（下 1/2） ----
-        float rx = px + pad + 180 + 12 + 464 + 12;
-        float rw = 200;
-        float craftH = 128;
-        float craftY = py + pad;
-        UiKit.rect(batch, vh, rx, craftY, rw, craftH, new Color(0.078f, 0.078f, 0.11f, 0.85f));
-        UiKit.frame(batch, vh, rx, craftY, rw, craftH, 1, new Color(1, 1, 1, 0.18f));
-        // 3×3 合成格 + 箭头 + 结果
-        float cell = 28, cgap = 3;
-        float grid3w = cell * 3 + cgap * 2;
-        float grid3h = cell * 3 + cgap * 2;
-        float arrowW = 20;
-        float total = grid3w + 8 + arrowW + 8 + cell;
-        float cx0 = rx + (rw - total) / 2;
-        float cy0 = craftY + (craftH - grid3h) / 2;
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                float sx = cx0 + c * (cell + cgap);
-                float sy = cy0 + r * (cell + cgap);
-                UiKit.rect(batch, vh, sx, sy, cell, cell, new Color(0.235f, 0.235f, 0.275f, 0.7f));
-                UiKit.frame(batch, vh, sx, sy, cell, cell, 2, new Color(1, 1, 1, 0.22f));
-            }
-        }
-        // 合成箭头（矩形手动绘制，避免字体缺字形不可见）
-        Color ac = new Color(0.67f, 0.67f, 0.67f, 1);
-        float ax = cx0 + grid3w + 8;
-        float ay = cy0 + cell / 2;
-        UiKit.rect(batch, vh, ax, ay - 1, arrowW - 8, 3, ac);       // 箭杆
-        float hx = ax + arrowW - 8;
-        UiKit.rect(batch, vh, hx + 7, ay - 4, 2, 8, ac);            // 箭头（梯形近似）
-        UiKit.rect(batch, vh, hx + 4, ay - 2.5f, 3, 5, ac);
-        UiKit.rect(batch, vh, hx + 1, ay - 1, 3, 2, ac);
-        float resX = cx0 + grid3w + 8 + arrowW + 8;
-        UiKit.rect(batch, vh, resX, cy0, cell, cell, new Color(0.235f, 0.235f, 0.275f, 0.7f));
-        UiKit.frame(batch, vh, resX, cy0, cell, cell, 2, new Color(1, 1, 1, 0.5f));
-
-        // 详情区（下 1/2）：横向 左 2/3 图标 + 右 1/3 文字
-        float detH = contentH - craftH - 8;
-        float detY = craftY + craftH + 8;
-        UiKit.rect(batch, vh, rx, detY, rw, detH, new Color(0.078f, 0.078f, 0.11f, 0.85f));
-        UiKit.frame(batch, vh, rx, detY, rw, detH, 1, new Color(1, 1, 1, 0.18f));
-        drawInvDetail(rx, detY, rw, detH, vh);
-
-        // 拖拽中的物品跟随鼠标（最上层）
-        if (draggingItem != null) {
-            drawItemIcon(draggingItem.item.name, draggingItem.item.count, mouseX - 16, mouseY - 16, 32, true, vh);
-        }
-        UiKit.globalAlpha = 1f;
-    }
-
-    /** 背包悬停详情：左 图标 + 右 详情文字 */
-    private void drawInvDetail(float rx, float detY, float rw, float detH, int vh) {
-        ItemSlot item = (hoverIndex >= 0 && hoverIndex < INVENTORY_TOTAL) ? inventory[hoverIndex] : null;
-        if (item == null) return;
-        String name = ZhName.zhBlockName(item.name, blocks);
-        BlockMeta meta = blocks.metaByName(item.name);
-        float iconAreaW = 84;   // 图标区窄些，文字区留出更多宽度
-        float iconSize = 56;
-        float ix = rx + (iconAreaW - iconSize) / 2;
-        float iy = detY + (detH - iconSize) / 2 + 5;
-        drawItemIcon(item.name, 0, ix, iy, iconSize, false, vh);
-        UiKit.frameR(batch, vh, ix, iy, iconSize, iconSize, new Color(1, 1, 1, 0.15f), 0);
-        float tx = rx + iconAreaW + 4;
-        float ty = detY + 15;
-        UiKit.text(batch, vh, UiKit.fontSmall, name, rx + iconAreaW / 2, ty, Color.WHITE);
-        if (meta != null) {
-            String hardness = meta.hardness > 0 ? String.format(Locale.ROOT, "%.1f", meta.hardness) : "不可破坏";
-            ty += 18;
-            UiKit.textLeft(batch, vh, UiKit.fontSmall, "硬度: " + hardness + " 堆叠: " + meta.stackSize, tx, ty,
-                    new Color(0.78f, 0.78f, 0.83f, 1));
-            ty += 15;
-            UiKit.textLeft(batch, vh, UiKit.fontSmall,
-                    (meta.solid ? "实体" : "非实体") + " " + (meta.transparent ? "透明" : "不透明"), tx, ty,
-                    new Color(0.78f, 0.78f, 0.83f, 1));
-            if (meta.drops != null && !meta.drops.isEmpty()) {
-                ty += 15;
-                UiKit.textLeft(batch, vh, UiKit.fontSmall, "掉落: " + ZhName.zhBlockName(meta.drops, blocks), tx, ty,
-                        new Color(0.78f, 0.78f, 0.83f, 1));
-            }
-        } else {
-            UiKit.textLeft(batch, vh, UiKit.fontSmall, "非方块物品", tx, ty + 18, new Color(0.78f, 0.78f, 0.83f, 1));
-        }
     }
 
     // ---------- ESC 菜单 ----------
@@ -2211,12 +2146,30 @@ public class GdxGame extends ApplicationAdapter {
             toggleAutoJump.updateHover(mouseX, mouseY);
             toggleAutoJump.draw(batch, vh);
         } else {
-            // 游戏设置：自动选择
+            // 游戏设置：自动选择 + 状态条位置
             UiKit.textLeft(batch, vh, UiKit.fontNormal, "自动选择：鼠标指向空气时吸附附近方块", cx, cy + 6,
                     new Color(0.86f, 0.82f, 0.72f, 1));
             chkAutoSelect = new UiKit.Button(cx, cy + 44, 260, 36, "");
             drawCheckbox(chkAutoSelect, autoSelectEnabled, vh);
             UiKit.textLeft(batch, vh, UiKit.fontNormal, "自动选择", cx + 48, cy + 52, Color.WHITE);
+            UiKit.textLeft(batch, vh, UiKit.fontNormal, "血量显示位置", cx, cy + 92,
+                    new Color(0.86f, 0.82f, 0.72f, 1));
+            hpBarToggle = new UiKit.Button(cx, cy + 124, 260, 36,
+                    hpBarPos == 0 ? "玩家头顶" : "物品栏上方左侧");
+            hpBarToggle.updateHover(mouseX, mouseY);
+            hpBarToggle.draw(batch, vh);
+            UiKit.textLeft(batch, vh, UiKit.fontNormal, "蓝条位置", cx, cy + 172,
+                    new Color(0.86f, 0.82f, 0.72f, 1));
+            manaBarToggle = new UiKit.Button(cx, cy + 204, 260, 36,
+                    manaBarPos == 0 ? "玩家右侧（竖条）" : "物品栏上方血条下方");
+            manaBarToggle.updateHover(mouseX, mouseY);
+            manaBarToggle.draw(batch, vh);
+            UiKit.textLeft(batch, vh, UiKit.fontNormal, "饱食度位置", cx, cy + 252,
+                    new Color(0.86f, 0.82f, 0.72f, 1));
+            hungerBarToggle = new UiKit.Button(cx, cy + 284, 260, 36,
+                    hungerBarPos == 0 ? "玩家左侧（竖条）" : "物品栏上方血条右侧");
+            hungerBarToggle.updateHover(mouseX, mouseY);
+            hungerBarToggle.draw(batch, vh);
         }
     }
 

@@ -14,5 +14,8 @@ public final class Tags {
     /** 玩家实体标签 */
     public static final String PLAYER = "player";
 
+    /** 怪物实体标签 */
+    public static final String MOB = "mob";
+
     private Tags() {}
 }

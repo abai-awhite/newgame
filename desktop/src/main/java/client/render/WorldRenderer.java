@@ -41,6 +41,15 @@ public class WorldRenderer {
         public float x, y;
         public String dir;
         public int anim;
+        public int hp = 100, maxHp = 100;
+    }
+
+    /** 怪物（服务器广播） */
+    public static class MobView {
+        public int id;
+        public float x, y;
+        public int hp, maxHp;
+        public boolean hurt;
     }
 
     /** 选中框 */
@@ -54,7 +63,7 @@ public class WorldRenderer {
                      TextureFactory texFactory, PlayerTextures playerTex,
                      float camX, float camY, LocalPlayer player,
                      List<DropView> drops, Map<String, RemotePlayer> remotes, String myId,
-                     Selection sel) {
+                     List<MobView> mobs, Selection sel, boolean showHitboxes) {
         // 背景
         batch.setColor(126 / 255f, 192 / 255f, 238 / 255f, 1);
         batch.draw(UiKit.whiteTex(), 0, 0, vw, vh);
@@ -108,6 +117,27 @@ public class WorldRenderer {
             }
         }
 
+        // 怪物（史莱姆）
+        if (mobs != null) {
+            for (MobView m : mobs) {
+                float sx = m.x - camX - TILE / 2f;
+                float sy = m.y - camY - TILE / 2f;
+                // 身体：绿色方块，受击时变红
+                Color body = m.hurt ? new Color(1f, 0.4f, 0.4f, 1f) : new Color(0.4f, 0.8f, 0.4f, 1f);
+                UiKit.rectR(batch, vh, sx + 2, sy + 2, TILE - 4, TILE - 4, body, 0);
+                // 暗色边框
+                UiKit.frameR(batch, vh, sx + 2, sy + 2, TILE - 4, TILE - 4, new Color(0.15f, 0.35f, 0.15f, 0.8f), 0);
+                // 眼睛（白色 + 黑色瞳孔）
+                float eyeY = sy + TILE * 0.35f;
+                UiKit.rectR(batch, vh, sx + TILE * 0.25f, eyeY, 5, 5, Color.WHITE, 0);
+                UiKit.rectR(batch, vh, sx + TILE * 0.6f, eyeY, 5, 5, Color.WHITE, 0);
+                UiKit.rectR(batch, vh, sx + TILE * 0.27f, eyeY + 1, 2, 3, Color.BLACK, 0);
+                UiKit.rectR(batch, vh, sx + TILE * 0.62f, eyeY + 1, 2, 3, Color.BLACK, 0);
+                // 血条（头顶）
+                drawHealthBar(batch, vh, sx, sy, m.hp, m.maxHp);
+            }
+        }
+
         // 其他玩家
         if (remotes != null) {
             for (RemotePlayer p : remotes.values()) {
@@ -116,12 +146,13 @@ public class WorldRenderer {
                 float sx = p.x - camX;
                 float sy = p.y - camY;
                 batch.draw(tex, sx, UiKit.up(vh, sy + TILE), TILE, TILE);
+                drawHealthBar(batch, vh, sx, sy, p.hp, p.maxHp);
                 UiKit.text(batch, vh, UiKit.fontSmall, p.name == null ? "Player" : p.name,
-                        sx + TILE / 2, sy - 4, Color.WHITE);
+                        sx + TILE / 2, sy - 22, Color.WHITE);
             }
         }
 
-        // 本机玩家
+        // 本机玩家（头顶血条/菱形/状态条已移至 HudRenderer）
         if (player != null) {
             Texture tex = playerTex.get(player.direction, player.animFrame);
             float sx = player.renderX - camX;
@@ -138,6 +169,60 @@ public class WorldRenderer {
             else if (!sel.solid) c = new Color(1, 1, 1, 0.3f);
             else c = new Color(1, 1, 1, 0.9f);
             UiKit.frameR(batch, vh, sx + 1, sy + 1, TILE - 2, TILE - 2, c, 0);
+        }
+
+        // F3+B：绘制所有实体碰撞箱（线框）
+        if (showHitboxes) {
+            Color hitCol = new Color(0f, 1f, 0f, 0.9f);
+            // 本机玩家：碰撞箱 inset=3, colW=colH=TILE-6=26
+            if (player != null) {
+                float inset = 3f;
+                float colW = TILE - 2 * inset;
+                drawHitbox(batch, vh, player.renderX + inset - camX, player.renderY + inset - camY,
+                        colW, colW, new Color(1f, 0f, 0f, 0.9f));
+            }
+            // 远程玩家（同本机玩家碰撞模型）
+            if (remotes != null) {
+                for (RemotePlayer p : remotes.values()) {
+                    if (myId != null && p.id != null && p.id.equals(myId)) continue;
+                    float inset = 3f;
+                    float colW = TILE - 2 * inset;
+                    drawHitbox(batch, vh, p.x + inset - camX, p.y + inset - camY,
+                            colW, colW, new Color(1f, 0.5f, 0f, 0.9f));
+                }
+            }
+            // 怪物：中心坐标，1x1 格碰撞箱
+            if (mobs != null) {
+                for (MobView m : mobs) {
+                    drawHitbox(batch, vh, m.x - TILE / 2f - camX, m.y - TILE / 2f - camY,
+                            TILE, TILE, hitCol);
+                }
+            }
+            // 掉落物：中心坐标，16x16 碰撞箱
+            if (drops != null) {
+                for (DropView d : drops) {
+                    drawHitbox(batch, vh, d.x - 8 - camX, d.y - 8 - camY,
+                            16, 16, new Color(0f, 0.8f, 1f, 0.9f));
+                }
+            }
+        }
+    }
+
+    /** 绘制实体碰撞箱线框（屏幕坐标 y 向下，2px 边框） */
+    private void drawHitbox(SpriteBatch batch, int vh, float sx, float sy, float w, float h, Color c) {
+        UiKit.frameR(batch, vh, sx, sy, w, h, c, 0);
+    }
+
+    /** 玩家头顶血条（sx/sy 为玩家左上角，屏幕坐标 y 向下），供远程玩家使用 */
+    private void drawHealthBar(SpriteBatch batch, int vh, float sx, float sy, int hp, int maxHp) {
+        float bw = TILE;                       // 血条宽 = 一个格子
+        float bh = 4;                          // 高 4px
+        float bx = sx + (TILE - bw) / 2f;
+        float by = sy - bh - 1;                // 玩家头顶紧贴 1px
+        UiKit.rectR(batch, vh, bx, by, bw, bh, new Color(0, 0, 0, 0.6f), 1);   // 背景
+        float ratio = maxHp > 0 ? Math.max(0, Math.min(1, (float) hp / maxHp)) : 0;
+        if (ratio > 0) {
+            UiKit.rectR(batch, vh, bx, by, bw * ratio, bh, new Color(0.95f, 0.2f, 0.15f, 1), 1);  // 红色
         }
     }
 }

@@ -2,6 +2,7 @@ package server;
 
 import entity.AABB;
 import entity.DropItem;
+import entity.Slime;
 import main.world.Chunk;
 import server.world.FluidSim;
 
@@ -43,6 +44,14 @@ public class WorldCore {
     /** 掉落物（全局，破坏方块产生）：id -> DropItem（广播线程读，主线程写） */
     private final Map<Integer, DropItem> dropItems = new ConcurrentHashMap<>();
     private final AtomicInteger dropIdCounter = new AtomicInteger(0);
+
+    /** 怪物（全局，定时刷怪）：id -> Slime（广播线程读，主线程写） */
+    private final Map<Integer, Slime> mobs = new ConcurrentHashMap<>();
+    private final AtomicInteger mobIdCounter = new AtomicInteger(0);
+    private int mobSpawnTimer = 0;
+    private static final int MOB_SPAWN_INTERVAL = 200;   // ~6.25 秒刷一次
+    private static final int MOB_MAX = 8;                 // 最多 8 只
+    private static final double MOB_SPAWN_RADIUS = 400;   // 玩家 400px 范围内刷
 
     /** 最近一次 tick 产生的方块变化（{x, y, oldType, newType, oldLevel, newLevel}） */
     private volatile List<int[]> lastChanges = List.of();
@@ -218,6 +227,105 @@ public class WorldCore {
     /** 清理已死亡掉落物（寿命耗尽），返回是否清掉。 */
     public void cleanupDrops() {
         dropItems.values().removeIf(d -> !d.isAlive());
+    }
+
+    // ==================== 怪物管理 ====================
+
+    /**
+     * 每 tick 更新所有怪物：AI（追踪最近玩家 + 跳跃）、物理（重力 + AABB 碰撞）、
+     * 接触伤害（与玩家 AABB 重叠 → 扣玩家血），最后清理死亡怪物。
+     * 由服务器主协调线程调用。
+     */
+    public void tickMobs(MobHitHandler hitHandler) {
+        // 定时刷怪
+        mobSpawnTimer++;
+        if (mobSpawnTimer >= MOB_SPAWN_INTERVAL && mobs.size() < MOB_MAX && !players.isEmpty()) {
+            mobSpawnTimer = 0;
+            trySpawnMob();
+        }
+
+        // 更新每只史莱姆
+        for (Map.Entry<Integer, Slime> entry : mobs.entrySet()) {
+            Slime s = entry.getValue();
+
+            // AI：找最近玩家，设定追踪方向
+            PlayerProfile nearest = null;
+            double nearestDist = Double.MAX_VALUE;
+            for (PlayerProfile p : players.values()) {
+                double dx = p.x - s.getX();
+                double dy = p.y - s.getY();
+                double dist = dx * dx + dy * dy;
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearest = p;
+                }
+            }
+            if (nearest != null) {
+                double dx = nearest.x - s.getX();
+                if (Math.abs(dx) > 8) {
+                    s.setTargetDirection(dx > 0 ? 1 : -1);
+                } else {
+                    s.setTargetDirection(0);
+                }
+            }
+
+            s.update();
+
+            // 接触伤害（AABB 重叠 → 扣玩家血）
+            if (nearest != null && hitHandler != null) {
+                AABB pBox = new AABB(nearest.x + 3, nearest.y + 3,
+                        TILE_SIZE - 6, TILE_SIZE - 6);
+                if (s.getAABB().intersects(pBox)) {
+                    hitHandler.onMobHitPlayer(nearest.playerId, entry.getKey(), 5);
+                }
+            }
+        }
+
+        // 清理死亡怪物
+        mobs.values().removeIf(s -> !s.isAlive());
+    }
+
+    /** 在随机玩家附近生成一只史莱姆 */
+    private void trySpawnMob() {
+        // 随机选一个玩家
+        List<PlayerProfile> list = new ArrayList<>(players.values());
+        PlayerProfile p = list.get((int) (Math.random() * list.size()));
+
+        // 在玩家附近随机位置生成（水平偏移 ±MOB_SPAWN_RADIUS）
+        double angle = Math.random() * Math.PI * 2;
+        double dist = 150 + Math.random() * (MOB_SPAWN_RADIUS - 150);
+        double sx = p.x + Math.cos(angle) * dist;
+        double sy = p.y + Math.sin(angle) * dist * 0.3;   // 垂直偏移小一些
+
+        // 找地面（从生成点向下找第一个实心方块上方）
+        int tx = (int) Math.floor(sx / TILE_SIZE);
+        for (int ty = (int) Math.floor(sy / TILE_SIZE); ty < Chunk.WORLD_HEIGHT - 1; ty++) {
+            int type = map.getTileType(tx, ty);
+            if (type != Chunk.AIR && type != Chunk.WATER && type != Chunk.LAVA) {
+                sy = ty * TILE_SIZE - TILE_SIZE / 2.0;
+                break;
+            }
+        }
+
+        int id = mobIdCounter.incrementAndGet();
+        mobs.put(id, new Slime(map, TILE_SIZE, sx, sy));
+    }
+
+    /** 客户端上报攻击怪物，扣血（返回是否击杀） */
+    public boolean damageMob(int mobId, int amount) {
+        Slime s = mobs.get(mobId);
+        if (s == null || !s.isAlive()) return false;
+        return s.damage(amount);
+    }
+
+    /** 存活怪物（id -> Slime，广播用） */
+    public Map<Integer, Slime> getMobs() {
+        return mobs;
+    }
+
+    /** 怪物接触玩家回调 */
+    public interface MobHitHandler {
+        void onMobHitPlayer(String playerId, int mobId, int damage);
     }
 
     /**

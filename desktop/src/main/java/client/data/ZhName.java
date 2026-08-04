@@ -105,7 +105,7 @@ public final class ZhName {
             {"candle", "蜡烛"}, {"cake", "蛋糕"}, {"egg", "蛋"}, {"snow", "雪"}, {"ice", "冰"}, {"sand", "沙"},
             {"gravel", "沙砾"}, {"dirt", "泥土"}, {"grass", "草"}, {"sea", "海"}, {"bed", "床"}, {"banner", "旗帜"},
             {"skull", "头颅"}, {"head", "头"}, {"torch", "火把"}, {"water", "水"}, {"clay", "黏土"}, {"wheat", "小麦"},
-            {"apple", "苹果"}, {"bread", "面包"}, {"sword", "剑"}, {"pickaxe", "镐"}, {"axe", "斧"}, {"shovel", "锹"},
+            {"apple", "苹果"}, {"bread", "面包"}, {"sword", "剑"}, {"gun", "枪"}, {"pickaxe", "镐"}, {"axe", "斧"}, {"shovel", "锹"},
             {"hoe", "锄"}, {"helmet", "头盔"}, {"chestplate", "胸甲"}, {"leggings", "护腿"}, {"boots", "靴子"},
             {"bow", "弓"}, {"arrow", "箭"}, {"shield", "盾牌"}, {"book", "书"}, {"seed", "种子"},
             {"carrot", "胡萝卜"}, {"potato", "马铃薯"}, {"beetroot", "甜菜"}, {"melon", "西瓜"}, {"pumpkin", "南瓜"},

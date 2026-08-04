@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>流程：</p>
  * <ol>
  *   <li>连接 A：join 携带固定 playerId，上报位置与背包（slot0=Grass|64），随后断开（服务端应写存档）；</li>
- *   <li>检查存档文件 world/web-world/player_&lt;id&gt;.txt 是否存在；</li>
+ *   <li>检查存档文件 world/block-world/player_&lt;id&gt;.txt 是否存在；</li>
  *   <li>连接 B：join 携带相同 playerId，welcome 中 playerId 应一致，且 slots[0] 应恢复为 Grass|64。</li>
  * </ol>
  */
@@ -30,7 +30,7 @@ public class SaveRestoreTest {
 
     public static void main(String[] args) throws Exception {
         WelcomeInfo first = runSession(true);
-        Path saveFile = Paths.get("world", "web-world", "player_" + PID + ".txt");
+        Path saveFile = Paths.get("world", "block-world", "player_" + PID + ".txt");
         boolean fileExists = Files.exists(saveFile);
 
         WelcomeInfo second = runSession(false);

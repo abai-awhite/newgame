@@ -103,7 +103,6 @@ public class TestClient {
             super(uri);
             this.name = name;
             this.idx = idx;
-            addHeader("Origin", "http://localhost:8080");
             // Alpha 从出生点开始移动，其余玩家错开站位
             this.reportX = 100 + idx * 24;
             this.reportY = 16352 - idx * 16;

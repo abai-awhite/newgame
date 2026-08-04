@@ -1,7 +1,7 @@
 {
   "wsPort": 8081,
   "seed": 0,
-  "worldName": "web-world",
+  "worldName": "block-world",
   "maxPlayers": 16,
   "chunkThreads": 2,
   "broadcastHz": 32,

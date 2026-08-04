@@ -53,6 +53,9 @@ public class GameServer extends WebSocketServer {
     /** 新世界创建参数（世界切换时复用） */
     private final int chunkThreads;
 
+    /** 最大玩家数（超过则拒绝新连接） */
+    private final int maxPlayers;
+
     /** 会话：WebSocket -> 客户端状态 */
     private final Map<WebSocket, ClientState> clients = new ConcurrentHashMap<>();
 
@@ -69,9 +72,10 @@ public class GameServer extends WebSocketServer {
     /** 广播线程：每 tick 接收一次状态快照，批量推送所有客户端（不阻塞主线程） */
     private final BroadcastService broadcastService;
 
-    public GameServer(int port, long seed, String worldName, int chunkThreads) {
+    public GameServer(int port, long seed, String worldName, int chunkThreads, int maxPlayers) {
         super(new InetSocketAddress(port));
         this.chunkThreads = chunkThreads;
+        this.maxPlayers = maxPlayers;
         // 初始世界：已存在则读存档种子（保持区块一致），否则用配置种子并生成元数据
         this.currentMeta = WorldStore.ensureMeta(worldName, seed);
         this.worldName = currentMeta.name;
@@ -83,6 +87,10 @@ public class GameServer extends WebSocketServer {
 
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
+        if (clients.size() >= maxPlayers) {
+            conn.close(1013, "服务器已满（上限 " + maxPlayers + " 人）");
+            return;
+        }
         String playerId = "p" + playerIdCounter.incrementAndGet();
         PlayerProfile profile = world.addPlayer(playerId);
         ClientState state = new ClientState(profile);
@@ -166,6 +174,14 @@ public class GameServer extends WebSocketServer {
                     }
                 }
                 case "joinWorld" -> enqueueWorldJoin(conn, state, obj);
+                case "attackMob" -> {
+                    // 客户端上报攻击怪物（子弹/剑命中）：服务器权威扣血
+                    int mobId = obj.optInt("mobId", -1);
+                    int dmg = obj.optInt("dmg", 10);
+                    if (mobId >= 0) {
+                        world.damageMob(mobId, dmg);
+                    }
+                }
                 default -> { /* 忽略未知类型 */ }
             }
         } catch (Exception e) {
@@ -358,6 +374,7 @@ public class GameServer extends WebSocketServer {
                     world.tickFluid();
                     List<int[]> changes = world.getLastChanges();
                     world.tickDrops(this::onDropPickup);
+                    world.tickMobs(this::onMobHitPlayer);
 
                     // 2.5 掉线检测：超过阈值未上报的客户端强制断开（清理幽灵连接）
                     long now = System.currentTimeMillis();
@@ -442,6 +459,21 @@ public class GameServer extends WebSocketServer {
         }
         msg.put("drops", drops);
 
+        // 怪物（id + 位置 + 生命值）
+        JSONArray mobs = new JSONArray();
+        for (Map.Entry<Integer, entity.Slime> e : world.getMobs().entrySet()) {
+            entity.Slime m = e.getValue();
+            JSONObject mo = new JSONObject();
+            mo.put("id", e.getKey());
+            mo.put("x", Math.round(m.getX() * 100.0) / 100.0);
+            mo.put("y", Math.round(m.getY() * 100.0) / 100.0);
+            mo.put("hp", m.getHp());
+            mo.put("maxHp", m.getMaxHp());
+            mo.put("hurt", m.isHurtFlashing());
+            mobs.put(mo);
+        }
+        msg.put("mobs", mobs);
+
         return msg;
     }
 
@@ -458,6 +490,23 @@ public class GameServer extends WebSocketServer {
                         .put("id", dropId)
                         .put("item", itemName)
                         .put("count", count).toString());
+                return;
+            }
+        }
+    }
+
+    /**
+     * 怪物接触玩家（服务器权威检测）：向该玩家发送 mobHit 事件，
+     * 客户端收到后扣减本地生命值。
+     */
+    private void onMobHitPlayer(String playerId, int mobId, int damage) {
+        for (Map.Entry<WebSocket, ClientState> e : clients.entrySet()) {
+            ClientState st = e.getValue();
+            if (st.profile != null && playerId.equals(st.profile.playerId)) {
+                e.getKey().send(new JSONObject()
+                        .put("type", "mobHit")
+                        .put("mobId", mobId)
+                        .put("dmg", damage).toString());
                 return;
             }
         }

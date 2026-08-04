@@ -79,6 +79,10 @@ public class Chunk {
 
         int[] groundY = new int[SIZE];
         int[] biome = new int[SIZE];
+        // 每列水面线：默认全局 waterY，湖区设为左右边界较低一侧（水被较高一侧围住不外溢）
+        int[] waterLine = new int[SIZE];
+        boolean[] isLake = new boolean[SIZE];
+        int[] origGy = new int[SIZE];   // 下压前的原地表高度
         for (int localX = 0; localX < SIZE; localX++) {
             int worldX = chunkX * SIZE + localX;
             // 地形高度：先取 [-1,1] 分形噪声，再用 signedPow 压缩中间值
@@ -87,13 +91,13 @@ public class Chunk {
             double v = Math.signum(raw) * Math.pow(Math.abs(raw), 1.7);
             int gy = baseGroundLevel + (int) (v * amplitude);
             gy = Math.clamp(gy, 1, WORLD_HEIGHT - 5);
+            waterLine[localX] = waterY;  // 默认全局水面线
+            origGy[localX] = gy;
 
-            // 湖泊：低频噪声判定湖区（成片分布），湖盆下压至水面线以下形成湖（非高山区）
+            // 湖泊：X 轴用 lk 噪声判定湖区（lk>0.30），不限地形（山上也生成湖）
             double lk = biomeNoise.noise(worldX / 90.0, -0.3);
-            if (v < 0.30 && lk > 0.30) {
-                double k = Math.min((lk - 0.30) / 0.70, 1.0);      // 0~1 湖心系数
-                int lakeFloor = waterY + 4 + (int) (k * k * 40);   // 湖底在水面线下 4~44 格
-                if (lakeFloor > gy) gy = lakeFloor;
+            if (lk > 0.30) {
+                isLake[localX] = true;
             }
             groundY[localX] = gy;
 
@@ -110,24 +114,72 @@ public class Chunk {
             } else {
                 biome[localX] = 0;                       // 平原
             }
-            // 低洼处靠水线 -> 沙滩
-            if (gy >= waterY - 4 && biome[localX] != 2) biome[localX] = 5;
+            // 非湖区低洼处靠全局水线 -> 沙滩
+            if (!isLake[localX] && gy >= waterY - 4 && biome[localX] != 2) biome[localX] = 5;
+        }
+
+        // ==================== 湖泊生成（整合全部判定） ====================
+        // 判定1：X轴用 lk 噪声判定湖区（lk>0.30），不限地形（山上也生成湖）
+        // 判定2：Y轴检查该列最高方块（地表 gy = origGy）
+        // 判定3：相邻湖段（间隔≤2列）合并 + 跨区块边界扩展（噪声推算），整片湖统一水面
+        // 判定4：湖面 = 左右边界较低一侧（max，y值大=视觉低），水被较高一侧围住不外溢
+        // 判定5：湖底 = 湖面 + 随机深度(1~15)；原地表比湖底更深则保持原地表
+        // 判定6：湖段内比湖面还高的方块全部挖掉（不留湖中岛），形成规整湖盆
+        // 判定7：水面不超过两侧较低方块（湖面=较低一侧，天然满足）
+        int seg = 0;
+        while (seg < SIZE) {
+            if (!isLake[seg]) { seg++; continue; }
+            // 湖段 [seg, j)；与下一个湖段间隔 ≤ 2 列时合并（两湖刷到一块儿共用水面，避免高低不一）
+            int j = seg;
+            while (j < SIZE && isLake[j]) j++;
+            while (j < SIZE) {
+                int g2 = j;
+                while (g2 < SIZE && !isLake[g2]) g2++;
+                if (g2 == SIZE) break;
+                if (g2 - j <= 2) {
+                    j = g2;
+                    while (j < SIZE && isLake[j]) j++;
+                } else {
+                    break;
+                }
+            }
+            // 判定2+4：左右边界。区块内取原地表；触及区块边缘向区块外扩展（最多32列）
+            int leftGy = (seg > 0) ? origGy[seg - 1]
+                    : boundaryGy(baseGroundLevel, amplitude, terrainNoise, biomeNoise, chunkX * SIZE + seg - 1, -1);
+            int rightGy = (j < SIZE) ? origGy[j]
+                    : boundaryGy(baseGroundLevel, amplitude, terrainNoise, biomeNoise, chunkX * SIZE + j, 1);
+            int wl;
+            if (leftGy >= 0 && rightGy >= 0) wl = Math.max(leftGy, rightGy);
+            else if (leftGy >= 0) wl = leftGy;
+            else if (rightGy >= 0) wl = rightGy;
+            else wl = origGy[seg];                       // 两侧全为湖：fallback
+            for (int k = seg; k < j; k++) {
+                waterLine[k] = wl;
+                // 判定5+6：每列随机深度 1~15（确定性随机，基于该列 x），湖底波浪起伏
+                double rd = (resourceNoise.noise(chunkX * SIZE + k, 4.1) + 1) / 2;  // [0,1)
+                int depth = 1 + (int) (rd * 15);
+                // 比湖面高的部分全部挖掉 → 湖底 = 湖面+该列随机深度；原本更深则保持
+                groundY[k] = Math.max(origGy[k], wl + depth);
+                if (biome[k] != 2) biome[k] = 5;         // 湖底沙底
+            }
+            seg = j;
         }
 
         // 1) 逐列填充：地表 -> 泥土/沙 -> 石头 -> 深层岩
         for (int localX = 0; localX < SIZE; localX++) {
             int worldX = chunkX * SIZE + localX;
             int gy = groundY[localX];
+            int wl = waterLine[localX];                 // 该列水面线
             int b = biome[localX];
-            boolean underwater = gy > waterY;
+            boolean underwater = gy > wl;
             for (int localY = 0; localY < SIZE; localY++) {
                 int worldY = chunkY * SIZE + localY;
                 int depth = worldY - gy;
                 if (worldY < gy) {
-                    if (underwater && worldY >= waterY) {
+                    if (underwater && worldY >= wl) {
                         tiles[localX][localY] = WATER;
                         // Terraria 式液面：水面线那一格部分充盈，其下为满格
-                        fluidLevel[localX][localY] = worldY == waterY ? WATER_SURFACE_LEVEL : 0;
+                        fluidLevel[localX][localY] = worldY == wl ? WATER_SURFACE_LEVEL : 0;
                     } else {
                         tiles[localX][localY] = AIR;
                     }
@@ -237,6 +289,34 @@ public class Chunk {
         generated = true;
         modified = false;
         saved = false;
+    }
+
+    /** 区块外某列是否为湖区（与生成时同一噪声判定） */
+    private static boolean isLakeAt(PerlinNoise biomeNoise, int worldX) {
+        return biomeNoise.noise(worldX / 90.0, -0.3) > 0.30;
+    }
+
+    /** 区块外某列的原地表高度（与生成时同一公式） */
+    private static int origGyAt(int baseGroundLevel, int amplitude, PerlinNoise terrainNoise, int worldX) {
+        double raw = terrainNoise.terrainHeight(worldX);
+        double v = Math.signum(raw) * Math.pow(Math.abs(raw), 1.7);
+        int gy = baseGroundLevel + (int) (v * amplitude);
+        return Math.clamp(gy, 1, WORLD_HEIGHT - 5);
+    }
+
+    /**
+     * 从 startX 起向 dir 方向（-1 左 / 1 右）扩展，找最近的非湖区列作为湖边界，
+     * 最多扩展 32 列；全部为湖则返回 -1（由调用方 fallback）。
+     */
+    private static int boundaryGy(int baseGroundLevel, int amplitude, PerlinNoise terrainNoise,
+                                  PerlinNoise biomeNoise, int startX, int dir) {
+        for (int d = 0; d < 32; d++) {
+            int wx = startX + dir * d;
+            if (!isLakeAt(biomeNoise, wx)) {
+                return origGyAt(baseGroundLevel, amplitude, terrainNoise, wx);
+            }
+        }
+        return -1;
     }
 
     /** 只在目标位置为空气且不越界时放置 */
